@@ -1,0 +1,42 @@
+[tool.poetry]
+name = "resilience-assessment-app"
+version = "0.1.0"
+description = "Interactive operational resilience maturity assessment (CMMI 1–5) with Streamlit, SQLAlchemy, and optional SQLite/MySQL backends."
+authors = ["Your Name <you@example.com>"]
+readme = "README.md"
+packages = [{include = "app"}]
+license = "MIT"
+
+[tool.poetry.dependencies]
+python = ">=3.10"
+streamlit = "^1.37.0"
+pandas = "^2.2.2"
+numpy = "^1.26.4"
+SQLAlchemy = "^2.0.31"
+alembic = "^1.13.2"
+plotly = "^5.23.0"
+openpyxl = "^3.1.5"
+python-dotenv = "^1.0.1"
+pydantic = "^2.8.2"
+# For MySQL5.6 compatibility use PyMySQL (pure Python) to avoid system deps of mysqlclient
+pymysql = "^1.1.1"
+# Excel export
+XlsxWriter = "^3.2.0"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.3.2"
+pytest-cov = "^5.0.0"
+black = "^24.8.0"
+isort = "^5.13.2"
+mypy = "^1.10.1"
+
+[tool.black]
+line-length = 100
+target-version = ["py310"]
+
+[tool.isort]
+profile = "black"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
