@@ -56,6 +56,55 @@ div.block-container { padding-top: 1rem; }
 table { font-size: 0.9rem; }
 </style>
 """
+
+CSS += """
+<style>
+:root{
+  --space-2:.5rem; --space-3:.75rem; --space-4:1rem; --space-6:1.5rem;
+  --radius:12px; --brand:#204e8a; --muted:#666; --border:#e6e6e6;
+}
+.theme-picker { display:grid; grid-template-columns: 1fr 1fr; gap: var(--space-4); margin-bottom: var(--space-4); }
+.theme-picker fieldset { border:none; padding:0; margin:0; }
+.radio-card { position:relative; display:flex; align-items:center; gap:.5rem; border:1px solid var(--border); border-radius:var(--radius); padding:var(--space-4); cursor:pointer; }
+.radio-card input { position:absolute; inset:0; opacity:0; cursor:pointer; }
+.radio-card:has(input:checked){ border-color: var(--brand); box-shadow:0 0 0 3px rgba(32,78,138,.15); }
+.theme-workspace { display:grid; grid-template-columns: minmax(520px, 1fr) minmax(320px, 36%); gap: var(--space-4); align-items:start; }
+.workspace-header { display:flex; align-items:center; justify-content:space-between; gap:var(--space-3); margin-bottom: var(--space-3); }
+.topic-list { display:flex; flex-direction:column; gap: var(--space-3); }
+.topic-card { border:1px solid var(--border); border-radius:var(--radius); padding: var(--space-4); background:#fff; box-shadow:0 1px 3px rgba(0,0,0,.04); }
+.topic-card h3 { margin:0 0 .5rem 0; font-size:1.05rem; }
+.topic-card .hint { color: var(--muted); font-size:.9rem; margin:.25rem 0 0 0; }
+.topic-card .actions { display:flex; gap: var(--space-2); align-items:center; }
+.drawer { position:sticky; top:1rem; max-height:82vh; overflow:auto; border-left:1px solid #eee; padding-left: var(--space-4); }
+.drawer h2 { margin-top:0; font-size:1.1rem; }
+.level-title { margin:.75rem 0 .25rem; }
+.level-title.is-current { font-weight:700; }
+button:focus, .radio-card:focus-within, select:focus, textarea:focus { outline:3px solid rgba(32,78,138,.35); outline-offset:2px; }
+.kbd-hint kbd { border:1px solid #ccc; border-bottom-width:2px; padding:0 .25rem; border-radius:4px; font-family:ui-monospace, SFMono-Regular, Menlo, monospace; font-size:.85em;}
+</style>
+"""
+
+CSS += """
+<style>
+.mini-toolbar{
+  position: sticky;
+  top: 0;
+  z-index: 1000;
+  background: #fff;
+  border-bottom: 1px solid #eee;
+  padding: .5rem .25rem .6rem;
+  margin: 0 0 0.75rem 0;
+}
+.mini-toolbar .crumbs{ font-weight:600; }
+.mini-toolbar .pill{
+  background:#F4F4F4; border-radius:999px; padding:.25rem .6rem; font-size:.9rem; color:#222;
+  white-space:nowrap; display:inline-block;
+}
+.mini-toolbar .spacer{ height:.25rem; }
+</style>
+"""
+
+
 st.markdown(CSS, unsafe_allow_html=True)
 
 
@@ -127,6 +176,15 @@ def fetch_sessions(SessionLocal) -> tuple[list[dict], bool]:
             raise
     return sessions, db_uninitialized
 
+
+# ---------- Helper shows the current level's first bullet ----------
+def guidance_preview_for(tid: int, level_or_na, guidance_index: dict[int, dict[int, list[str]]]) -> str:
+    if isinstance(level_or_na, int):
+        bullets = guidance_index.get(tid, {}).get(level_or_na, [])
+        return f"{level_or_na} — {bullets[0]}" if bullets else ""
+    return ""
+
+
 # ---------- Export helpers ----------
 def normalize_df_for_json(df: pd.DataFrame) -> pd.DataFrame:
     """
@@ -183,289 +241,479 @@ def make_xlsx_export_bytes(topics_df: pd.DataFrame, entries_df: pd.DataFrame) ->
     return bio.getvalue()
 
 
+# ---------- Cached data loaders for performance ----------
+@st.cache_data(ttl=300, show_spinner=False)
+def cached_topics_df(_SessionLocal, db_url: str) -> pd.DataFrame:
+    # db_url is only used to make the cache key stable & DB-specific
+    with _SessionLocal() as s:
+        df = list_dimensions_with_topics(s)
+    return df
+
+
+@st.cache_data(ttl=300, show_spinner=False)
+def cached_explanations_for(
+    _SessionLocal, db_url: str, topic_ids: tuple[int, ...]
+) -> dict[int, dict[int, list[str]]]:
+    if not topic_ids:
+        return {}
+    with _SessionLocal() as s:
+        rows = (
+            s.query(ExplanationORM.topic_id, ExplanationORM.level, ExplanationORM.text)
+            .filter(ExplanationORM.topic_id.in_(list(topic_ids)))
+            .order_by(ExplanationORM.topic_id, ExplanationORM.level, ExplanationORM.id)
+            .all()
+        )
+    out: dict[int, dict[int, list[str]]] = {}
+    for tid, lvl, txt in rows:
+        out.setdefault(int(tid), {}).setdefault(int(lvl), []).append(txt)
+    return out
+
+
+def guidance_preview_for(tid: int, level_or_na, guidance_index: dict[int, dict[int, list[str]]]) -> str:
+    """Return first bullet for the *current* level; if N/A or no bullets, show empty string."""
+    if isinstance(level_or_na, int):
+        firsts = guidance_index.get(tid, {}).get(level_or_na, [])
+        return f"{level_or_na} — {firsts[0]}" if firsts else ""
+    # N/A → no preview text (stays clean)
+    return ""
+
 # ---------- Sidebar builder ----------
 def build_sidebar(default_cfg: DBConfig):
-    st.sidebar.header("Database")
-
-    # Backend selection
-    starting_backend_is_sqlite = 0 if default_cfg.backend == "sqlite" else 1
-    backend_choice = st.sidebar.radio(
-        "Backend",
-        ["sqlite", "mysql"],
-        index=starting_backend_is_sqlite,
-        horizontal=True,
-        key="db_backend_choice",
-    )
-
-    # Build config from UI
-    if backend_choice == "sqlite":
-        sqlite_path = st.sidebar.text_input(
-            "SQLite path",
-            value=default_cfg.sqlite_path or "./resilience.db",
-            key="sqlite_path_input",
-        )
-        cfg = DBConfig(backend="sqlite", sqlite_path=sqlite_path)
-    else:
-        host = st.sidebar.text_input("Host", value=default_cfg.mysql_host or "localhost")
-        port = st.sidebar.number_input(
-            "Port", value=int(default_cfg.mysql_port or 3306), step=1
-        )
-        user = st.sidebar.text_input("User", value=default_cfg.mysql_user or "root")
-        pw = st.sidebar.text_input(
-            "Password", value=default_cfg.mysql_password or "", type="password"
-        )
-        dbname = st.sidebar.text_input(
-            "Database", value=default_cfg.mysql_db or "resilience"
-        )
-        cfg = DBConfig(
-            backend="mysql",
-            mysql_host=host,
-            mysql_port=int(port),
-            mysql_user=user,
-            mysql_password=pw,
-            mysql_db=dbname,
+    # ─────────────────────────────────────────────────────────
+    # 1) Database & Dataset  (collapsible)
+    # ─────────────────────────────────────────────────────────
+    with st.sidebar.expander("① Database & Dataset", expanded=True):
+        # Backend selection
+        starting_backend_is_sqlite = 0 if default_cfg.backend == "sqlite" else 1
+        backend_choice = st.radio(
+            "Backend",
+            ["sqlite", "mysql"],
+            index=starting_backend_is_sqlite,
+            horizontal=True,
+            key="db_backend_choice",
         )
 
-    # Engine & Session factory
-    url = build_connection_url(cfg)
-    engine, SessionLocal = make_engine_and_session(url)
-
-    # Initialise DB
-    if st.sidebar.button("Initialise DB (create tables)", key="btn_init_db"):
-        initialise_database(engine)
-        st.sidebar.success("Tables created or already exist.")
-
-    # Single source of truth for Excel path (avoid duplicate keys)
-    excel_path = st.sidebar.text_input(
-        "Excel path",
-        value="enhanced-operational-resilience-maturity-assessment.xlsx",
-        key="excel_path_seed",
-    )
-    excel_path_resolved = Path(excel_path)
-
-    # Seed from Excel
-    if st.sidebar.button("Seed from Excel", key="btn_seed"):
-        rc, cmd_str, out, err = seed_database_from_excel(cfg, excel_path_resolved)
-        st.sidebar.code(cmd_str)
-        st.sidebar.text(out)
-        if rc != 0:
-            st.sidebar.error(err or "Seeding failed.")
+        # Build config from UI
+        if backend_choice == "sqlite":
+            sqlite_path = st.text_input(
+                "SQLite path",
+                value=default_cfg.sqlite_path or "./resilience.db",
+                key="sqlite_path_input",
+            )
+            cfg = DBConfig(backend="sqlite", sqlite_path=sqlite_path)
         else:
-            st.sidebar.success("Seed completed.")
+            host = st.text_input("Host", value=default_cfg.mysql_host or "localhost")
+            port = st.number_input(
+                "Port", value=int(default_cfg.mysql_port or 3306), step=1
+            )
+            user = st.text_input("User", value=default_cfg.mysql_user or "root")
+            pw = st.text_input(
+                "Password", value=default_cfg.mysql_password or "", type="password"
+            )
+            dbname = st.text_input(
+                "Database", value=default_cfg.mysql_db or "resilience"
+            )
+            cfg = DBConfig(
+                backend="mysql",
+                mysql_host=host,
+                mysql_port=int(port),
+                mysql_user=user,
+                mysql_password=pw,
+                mysql_db=dbname,
+            )
 
-    # Sessions panel
-    st.sidebar.markdown("---")
-    st.sidebar.header("Sessions")
+        # Engine & Session factory
+        url = build_connection_url(cfg)
+        engine, SessionLocal = make_engine_and_session(url)
+        st.session_state["db_url"] = url  # cache key for data loaders
 
-    sessions, db_uninitialized = fetch_sessions(SessionLocal)
-    st.session_state["db_uninitialized"] = db_uninitialized
+        # Initialise DB
+        if st.button("Initialise DB (create tables)", key="btn_init_db"):
+            initialise_database(engine)
+            st.success("Tables created or already exist.")
 
-    if sessions:
-        options = {f"#{x['id']} — {x['name']}": x["id"] for x in sessions}
-        sel_label = st.sidebar.selectbox(
-            "Select existing session", list(options.keys()), index=0, key="session_pick"
+        # Single source of truth for Excel path
+        excel_path = st.text_input(
+            "Excel path",
+            value="enhanced-operational-resilience-maturity-assessment.xlsx",
+            key="excel_path_seed",
         )
-        if st.sidebar.button("Use selected session", key="btn_use_session"):
-            st.session_state["session_id"] = options[sel_label]
-            st.sidebar.success(f"Using session {sel_label}")
-    else:
-        st.sidebar.info("No sessions yet — create one in 'Rate topics'.")
+        excel_path_resolved = Path(excel_path)
 
-    with st.sidebar.expander("Combine multiple sessions → master session", expanded=False):
-        # Lazy import here avoids issues in some packaging flows
-        from app.application.api import combine_sessions_to_master
+        # Seed from Excel
+        if st.button("Seed from Excel", key="btn_seed"):
+            rc, cmd_str, out, err = seed_database_from_excel(cfg, excel_path_resolved)
+            st.code(cmd_str)
+            st.text(out)
+            if rc != 0:
+                st.error(err or "Seeding failed.")
+            else:
+                st.success("Seed completed.")
 
-        if sessions:
-            multi_labels = [f"#{x['id']} — {x['name']}" for x in sessions]
-            selected = st.multiselect(
-                "Source sessions", multi_labels, default=[], key="combine_sources"
-            )
-            name_master = st.text_input(
-                "Master session name", value="Combined Assessment", key="combine_name"
-            )
-            if st.button("Create master session", key="btn_create_master"):
-                source_ids = [
-                    int(lbl.split("—")[0].strip()[1:]) for lbl in selected
-                ]  # parse "#123 — Name"
-                if not source_ids:
-                    st.warning("Pick at least one source session.")
+    # ─────────────────────────────────────────────────────────
+    # 2) Sessions & Assessment (collapsible)
+    # ─────────────────────────────────────────────────────────
+    with st.sidebar.expander("② Sessions & Assessment", expanded=True):
+        sessions, db_uninitialized = fetch_sessions(SessionLocal)
+        st.session_state["db_uninitialized"] = db_uninitialized
+
+        if db_uninitialized:
+            st.info("No database found. Please initialise the database first.")
+        else:
+            # Existing sessions
+            if sessions:
+                options = {f"#{x['id']} — {x['name']}": x["id"] for x in sessions}
+                sel_label = st.selectbox(
+                    "Existing sessions",
+                    list(options.keys()),
+                    index=0,
+                    key="session_pick",
+                )
+                if st.button("Use selected session", key="btn_use_session"):
+                    st.session_state["session_id"] = options[sel_label]
+                    st.success(f"Using session {sel_label}")
+
+                st.caption(f"Active: Session #{st.session_state.get('session_id','—')}")
+
+            else:
+                st.info("No sessions yet — create one below.")
+
+            st.markdown("---")
+
+            # Assessment Session (create / update)
+            st.subheader("Create / Use Assessment")
+            with st.form("session_form_sidebar", clear_on_submit=False):
+                name = st.text_input("Session name", value="Baseline Assessment", key="form_name")
+                assessor = st.text_input("Assessor (optional)", key="form_assessor")
+                org = st.text_input("Organization (optional)", key="form_org")
+                notes = st.text_input("Notes (optional)", key="form_notes")
+                submitted = st.form_submit_button("Create / Use Session")
+            if submitted:
+                with SessionLocal() as s:
+                    sess = upsert_assessment_session(
+                        s,
+                        name=name,
+                        assessor=assessor,
+                        organization=org,
+                        notes=notes,
+                    )
+                    s.commit()
+                    st.session_state["session_id"] = sess.id
+                    st.success(f"Using session #{sess.id}: {sess.name}")
+
+            # Combine multiple sessions → master session
+            st.markdown("---")
+            with st.expander("Combine sessions → master session", expanded=False):
+                from app.application.api import combine_sessions_to_master
+                if sessions:
+                    multi_labels = [f"#{x['id']} — {x['name']}" for x in sessions]
+                    selected = st.multiselect(
+                        "Source sessions", multi_labels, default=[], key="combine_sources"
+                    )
+                    name_master = st.text_input(
+                        "Master session name",
+                        value="Combined Assessment",
+                        key="combine_name",
+                    )
+                    if st.button("Create master session", key="btn_create_master"):
+                        source_ids = [
+                            int(lbl.split("—")[0].strip()[1:]) for lbl in selected
+                        ]
+                        if not source_ids:
+                            st.warning("Pick at least one source session.")
+                        else:
+                            with UnitOfWork(SessionLocal).begin() as s:
+                                master = combine_sessions_to_master(
+                                    s, source_session_ids=source_ids, name=name_master
+                                )
+                                st.session_state["session_id"] = master.id
+                                st.success(
+                                    f"Created master session #{master.id}: {master.name} (now active)"
+                                )
                 else:
-                    with UnitOfWork(SessionLocal).begin() as s:
-                        master = combine_sessions_to_master(
-                            s, source_session_ids=source_ids, name=name_master
-                        )
-                        st.session_state["session_id"] = master.id
-                        st.success(
-                            f"Created master session #{master.id}: {master.name} (now active)"
-                        )
-        else:
-            st.info("No sessions available to combine.")
+                    st.info("No sessions available to combine.")
 
     return cfg, engine, SessionLocal
 
 
 # ---------- Rate topics ----------
 def build_rate_topics(SessionLocal) -> None:
-    st.markdown('<div class="sticky">', unsafe_allow_html=True)
-    with st.container():
-        st.subheader("Assessment Session")
-        with st.form("session_form", clear_on_submit=False):
-            c1, c2, c3, c4 = st.columns([1, 1, 1, 2])
-            name = c1.text_input("Session name", value="Baseline Assessment")
-            assessor = c2.text_input("Assessor (optional)")
-            org = c3.text_input("Organization (optional)")
-            notes = c4.text_input("Notes (optional)")
-            submitted = st.form_submit_button("Create / Use Session")
-        if submitted:
-            with SessionLocal() as s:
-                sess = upsert_assessment_session(
-                    s,
-                    name=name,
-                    assessor=assessor,
-                    organization=org,
-                    notes=notes,
-                )
-                s.commit()
-                st.session_state["session_id"] = sess.id
-                st.success(f"Using session #{sess.id}: {sess.name}")
-    st.markdown("</div>", unsafe_allow_html=True)
-
     session_id = st.session_state.get("session_id")
     if not session_id:
-        st.info("Create or select an assessment session to begin rating.")
+        st.info("Select or create a session from the sidebar to begin rating.")
+        return
+    
+    # ---- Dimension/Theme gating in a sticky mini-toolbar ----
+    db_url = st.session_state.get("db_url", "")
+    df_all = cached_topics_df(SessionLocal, db_url)
+
+    # Open a sticky container wrapper
+    st.markdown('<div class="mini-toolbar">', unsafe_allow_html=True)
+    c_dim, c_theme, c_meta = st.columns([1, 1, 1])
+
+    with c_dim:
+        dims = ["— Select —"] + sorted(df_all["Dimension"].unique().tolist())
+        dim = st.selectbox("Dimension", dims, index=0, key="ui_dim_select", label_visibility="collapsed")
+        st.caption("Dimension")
+
+    # Build themes based on current dimension (or empty until chosen)
+    with c_theme:
+        if dim == "— Select —":
+            themes = ["— Select —"]
+        else:
+            df_dim = df_all[df_all["Dimension"] == dim]
+            themes = ["— Select —"] + sorted(df_dim["Theme"].unique().tolist())
+        theme = st.selectbox("Theme", themes, index=0, key="ui_theme_select", label_visibility="collapsed")
+        st.caption("Theme")
+
+    with c_meta:
+        # Placeholder for breadcrumb + progress; we update after we can compute it
+        crumbs_ph = st.empty()
+        pill_ph = st.empty()
+
+    # Close sticky wrapper
+    st.markdown("</div>", unsafe_allow_html=True)
+
+    # Gate on selections (keep early returns but now the controls stay visible in toolbar)
+    if dim == "— Select —":
+        st.info("Choose a Dimension to continue.")
         return
 
-    # Filters + grid
+    # Safe because dim was selected
+    df_dim = df_all[df_all["Dimension"] == dim]
+
+    if theme == "— Select —":
+        # Show crumbs without a pill yet
+        crumbs_ph.markdown(f'<div class="crumbs">{dim}</div>', unsafe_allow_html=True)
+        st.info("Choose a Theme to start rating topics.")
+        return
+
+    # ---- Build view for the chosen Theme ----
+    df = df_dim[df_dim["Theme"] == theme]
+    topic_ids_in_view = df["TopicID"].astype(int).tolist()
+    if not topic_ids_in_view:
+        crumbs_ph.markdown(f'<div class="crumbs">{dim} › {theme}</div>', unsafe_allow_html=True)
+        pill_ph.markdown("")  # nothing to show
+        st.info("No topics match the current selection.")
+        return
+
+    # Prefetch entries and labels
     with SessionLocal() as s:
-        df_topics = list_dimensions_with_topics(s)
-
-        dims = ["All"] + sorted(df_topics["Dimension"].unique().tolist())
-        dim = st.selectbox("Dimension", dims, index=0, key="filter_dim")
-        if dim != "All":
-            df_topics = df_topics[df_topics["Dimension"] == dim]
-
-        themes = ["All"] + sorted(df_topics["Theme"].unique().tolist())
-        theme = st.selectbox("Theme", themes, index=0, key="filter_theme")
-        if theme != "All":
-            df_topics = df_topics[df_topics["Theme"] == theme]
-
-        # Labels
+        entries = (
+            s.query(AssessmentEntryORM)
+            .filter(
+                AssessmentEntryORM.session_id == session_id,
+                AssessmentEntryORM.topic_id.in_(topic_ids_in_view),
+            )
+            .all()
+        )
+        current_by_tid = {e.topic_id: e for e in entries}
         rating_labels = {
             r.level: r.label for r in s.query(RatingScaleORM).order_by(RatingScaleORM.level)
         }
 
-        # Progress — N/A does NOT count as rated (2B)
-        topic_ids_in_view = df_topics["TopicID"].astype(int).tolist()
-        rated_count = 0
-        for tid in topic_ids_in_view:
-            key = f"rating_{tid}"
-            if key in st.session_state:
-                # counted only if 1..5 selected
-                rated = st.session_state[key] in [1, 2, 3, 4, 5]
-            else:
-                # Fallback to DB if control never rendered yet
-                cur = (
-                    s.query(AssessmentEntryORM)
-                    .filter_by(session_id=session_id, topic_id=tid)
-                    .one_or_none()
-                )
-                rated = bool(cur and (not cur.is_na) and (cur.rating_level is not None))
-            if rated:
-                rated_count += 1
-        total_topics = len(topic_ids_in_view)
-        pct = (rated_count / total_topics) * 100 if total_topics else 0.0
-        st.markdown(
-            f'<span class="progress-pill">{pct:.0f}% topics rated (this view)</span>',
-            unsafe_allow_html=True,
+    # Cached guidance index
+    guidance_index = cached_explanations_for(SessionLocal, db_url, tuple(topic_ids_in_view))
+
+    # Progress (N/A does not count)
+    def current_ui_or_db_rating(tid: int) -> Optional[int]:
+        key = f"rating_{tid}"
+        if key in st.session_state and isinstance(st.session_state[key], int):
+            return int(st.session_state[key])
+        e = current_by_tid.get(tid)
+        if e and (not e.is_na) and e.rating_level is not None:
+            return int(e.rating_level)
+        return None
+
+    rated_count = sum(1 for tid in topic_ids_in_view if current_ui_or_db_rating(tid) is not None)
+    total_topics = len(topic_ids_in_view)
+    pct = (rated_count / total_topics) * 100 if total_topics else 0.0
+
+    # ✅ Update the sticky toolbar meta now that we can compute it
+    crumbs_ph.markdown(f'<div class="crumbs">{dim} › {theme}</div>', unsafe_allow_html=True)
+    pill_ph.markdown(f'<div class="pill">{pct:.0f}% topics rated</div>', unsafe_allow_html=True)
+
+
+    # # ---- Dimension/Theme gating ----
+    # db_url = st.session_state.get("db_url", "")
+    # df_all = cached_topics_df(SessionLocal, db_url)
+
+    # dims = ["— Select —"] + sorted(df_all["Dimension"].unique().tolist())
+    # dim = st.selectbox("Dimension", dims, index=0, key="ui_dim_select")
+
+    # if dim == "— Select —":
+    #     st.info("Choose a Dimension to continue.")
+    #     return
+
+    # df_dim = df_all[df_all["Dimension"] == dim]
+    # themes = ["— Select —"] + sorted(df_dim["Theme"].unique().tolist())
+    # theme = st.selectbox("Theme", themes, index=0, key="ui_theme_select")
+
+    # if theme == "— Select —":
+    #     st.info("Choose a Theme to start rating topics.")
+    #     return
+
+    # # ---- Build view for the chosen Theme ----
+    # df = df_dim[df_dim["Theme"] == theme]
+    # topic_ids_in_view = df["TopicID"].astype(int).tolist()
+    # if not topic_ids_in_view:
+    #     st.info("No topics match the current selection.")
+    #     return
+
+    # # Prefetch entries and labels
+    # with SessionLocal() as s:
+    #     entries = (
+    #         s.query(AssessmentEntryORM)
+    #         .filter(
+    #             AssessmentEntryORM.session_id == session_id,
+    #             AssessmentEntryORM.topic_id.in_(topic_ids_in_view),
+    #         )
+    #         .all()
+    #     )
+    #     current_by_tid = {e.topic_id: e for e in entries}
+    #     rating_labels = {
+    #         r.level: r.label for r in s.query(RatingScaleORM).order_by(RatingScaleORM.level)
+    #     }
+
+    # guidance_index = cached_explanations_for(SessionLocal, db_url, tuple(topic_ids_in_view))
+
+    # # Progress (N/A does not count)
+    # def current_ui_or_db_rating(tid: int) -> Optional[int]:
+    #     key = f"rating_{tid}"
+    #     if key in st.session_state and isinstance(st.session_state[key], int):
+    #         return int(st.session_state[key])
+    #     e = current_by_tid.get(tid)
+    #     if e and (not e.is_na) and e.rating_level is not None:
+    #         return int(e.rating_level)
+    #     return None
+
+    # rated_count = sum(1 for tid in topic_ids_in_view if current_ui_or_db_rating(tid) is not None)
+    # total_topics = len(topic_ids_in_view)
+    # pct = (rated_count / total_topics) * 100 if total_topics else 0.0
+
+    # st.markdown(
+    #     f"""
+    #     <div class="workspace-header">
+    #       <div><strong>{dim}</strong> › <strong>{theme}</strong></div>
+    #       <div class="progress-pill">{pct:.0f}% topics rated</div>
+    #     </div>
+    #     """,
+    #     unsafe_allow_html=True,
+    # )
+
+    left, right = st.columns([2, 1], gap="large")
+
+    # Manage focused topic ID
+    focused_key = "focused_topic_id"
+    if focused_key not in st.session_state or int(st.session_state[focused_key]) not in topic_ids_in_view:
+        st.session_state[focused_key] = int(topic_ids_in_view[0])
+
+    with left:
+        # Unrated-first visual ordering to speed completion
+        def sort_key(row):
+            tid = int(row["TopicID"])
+            return 0 if current_ui_or_db_rating(tid) is None else 1
+
+        df_sorted = df.sort_values(by=["Theme", "Topic"]).sort_values(
+            by="TopicID",
+            key=lambda col: [sort_key(df.loc[df["TopicID"] == x].iloc[0]) for x in col],
         )
 
-        # Rating grid
-        for _, row in df_topics.iterrows():
-            with st.expander(f"🧩 {row['Topic']} — *{row['Theme']}*"):
-                c1, c2 = st.columns([3, 1])
+        for _, r in df_sorted.iterrows():
+            tid = int(r["TopicID"])
+            e = current_by_tid.get(tid)
 
-                # Guidance
+            # default selection prioritizes UI value, then DB, else N/A
+            if f"rating_{tid}" in st.session_state:
+                default_val = st.session_state[f"rating_{tid}"]
+            elif e and not e.is_na and e.rating_level is not None:
+                default_val = int(e.rating_level)
+            else:
+                default_val = "N/A"
+
+            # preview hint uses current level's first bullet
+            preview = guidance_preview_for(tid, default_val, guidance_index)
+
+            with st.container(border=False):
+                st.markdown(f'<article class="topic-card" aria-labelledby="t{tid}">', unsafe_allow_html=True)
+                st.markdown(f'<h3 id="t{tid}">{r["Topic"]}</h3>', unsafe_allow_html=True)
+
+                c1, c2 = st.columns([1, 1])
                 with c1:
-                    from app.infrastructure.models import ExplanationORM
-                    exps = (
-                        s.query(ExplanationORM.level, ExplanationORM.text)
-                        .filter(ExplanationORM.topic_id == int(row["TopicID"]))
-                        .order_by(ExplanationORM.level, ExplanationORM.id)
-                        .all()
-                    )
-                    if exps:
-                        with st.expander("Show guidance (per level)", expanded=False):
-                            prev_level = None
-                            for level, text_ in exps:
-                                if prev_level != level:
-                                    st.markdown(
-                                        f"**{level} — {rating_labels.get(level, str(level))}**"
-                                    )
-                                    prev_level = level
-                                st.markdown(f"- {text_}")
-
-                # Controls (single select_slider with N/A; remove checkbox and per-topic Save)
-                with c2:
-                    current = (
-                        s.query(AssessmentEntryORM)
-                        .filter_by(session_id=session_id, topic_id=int(row["TopicID"]))
-                        .one_or_none()
-                    )
-                    if current and not current.is_na and current.rating_level is not None:
-                        default_val = int(current.rating_level)
-                    else:
-                        default_val = "N/A"
-
+                    st.markdown('<label for="rate">CMMI rating</label>', unsafe_allow_html=True)
                     st.select_slider(
-                        "CMMI (N/A, 1–5)",
+                        "CMMI (N/A–5)",
                         options=RATING_OPTIONS,
                         value=default_val,
-                        key=f"rating_{int(row['TopicID'])}",
+                        key=f"rating_{tid}",
+                        help="Choose N/A if not applicable.",
                     )
-                    st.caption("Choose N/A or a CMMI level")
-
-                    st.text_input(
-                        "Comment (optional)",
-                        value=current.comment if current and current.comment else "",
-                        key=f"comment_{int(row['TopicID'])}",
+                    if preview:
+                        st.markdown(f'<p class="hint">{preview}</p>', unsafe_allow_html=True)
+                with c2:
+                    st.markdown('<label for="comment">Comment</label>', unsafe_allow_html=True)
+                    st.text_area(
+                        "Comment",
+                        value=st.session_state.get(f"comment_{tid}", (e.comment if e and e.comment else "")),
+                        key=f"comment_{tid}",
+                        height=70,
                     )
 
-    # --- Save all topics across the dataset in one go (1B) ---
-    # This saves only the topics that have a UI value in session_state, so we don't
-    # accidentally overwrite unseen topics. Existing DB values for untouched topics are preserved.
-    if st.button("💾 Save assessment (all topics)", key="save_assessment_all"):
-        with SessionLocal() as s2:
-            # load all topics once, then write in a single transaction
-            df_all = list_dimensions_with_topics(s2)
-            for _, row in df_all.iterrows():
-                tid = int(row["TopicID"])
-                rating_key = f"rating_{tid}"
-                comment_key = f"comment_{tid}"
+                if st.button("Full guidance", key=f"focus_{tid}", help="Show full guidance at right"):
+                    st.session_state[focused_key] = tid
 
-                if rating_key not in st.session_state and comment_key not in st.session_state:
-                    # user never visited/changed this topic; leave DB as-is
-                    continue
+                st.markdown("</article>", unsafe_allow_html=True)
 
-                sel = st.session_state.get(rating_key, "N/A")
-                comment_val = st.session_state.get(comment_key, None)
+        # Save all topics set in UI (across dataset); untouched topics remain unchanged
+        if st.button("💾 Save assessment (all topics)", key="save_assessment_all"):
+            with SessionLocal() as s2:
+                df_all_topics = cached_topics_df(SessionLocal, db_url)
+                for _, rr in df_all_topics.iterrows():
+                    ttid = int(rr["TopicID"])
+                    rating_key = f"rating_{ttid}"
+                    comment_key = f"comment_{ttid}"
+                    if rating_key not in st.session_state and comment_key not in st.session_state:
+                        continue
+                    val = st.session_state.get(rating_key, "N/A")
+                    comment_val = st.session_state.get(comment_key, None)
+                    if val == "N/A":
+                        is_na, cmmi = True, None
+                    else:
+                        is_na, cmmi = False, int(val)
+                    record_rating(
+                        s2,
+                        session_id=session_id,
+                        topic_id=ttid,
+                        cmmi_level=cmmi,
+                        is_na=is_na,
+                        comment=comment_val or None,
+                    )
+                s2.commit()
+            cached_topics_df.clear()
+            cached_explanations_for.clear()
+            st.success("Assessment saved.")
 
-                if sel == "N/A":
-                    is_na = True
-                    rating_val = None
-                else:
-                    is_na = False
-                    rating_val = int(sel)
+    with right:
+        st.markdown('<aside class="drawer" role="region" aria-label="Full guidance">', unsafe_allow_html=True)
+        focus_tid = int(st.session_state["focused_topic_id"])
+        title = df[df["TopicID"] == focus_tid]["Topic"].iloc[0]
+        st.markdown(f"<h2>Full guidance — {title}</h2>", unsafe_allow_html=True)
 
-                record_rating(
-                    s2,
-                    session_id=session_id,
-                    topic_id=tid,
-                    cmmi_level=rating_val,
-                    is_na=is_na,
-                    comment=comment_val or None,
-                )
-            s2.commit()
-        st.success("Assessment saved (all topics that were set in the UI).")
+        current_val = st.session_state.get(f"rating_{focus_tid}", None)
+        if not isinstance(current_val, int):
+            ee = current_by_tid.get(focus_tid)
+            current_val = (int(ee.rating_level) if ee and not ee.is_na and ee.rating_level is not None else None)
+
+        for lvl in [1, 2, 3, 4, 5]:
+            bullets = guidance_index.get(focus_tid, {}).get(lvl, [])
+            if not bullets:
+                continue
+            label = rating_labels.get(lvl, str(lvl))
+            css_class = "level-title is-current" if current_val == lvl else "level-title"
+            st.markdown(f'<h3 class="{css_class}">{lvl} — {label}</h3>', unsafe_allow_html=True)
+            for b in bullets[:10]:
+                st.markdown(f"- {b}")
+        st.markdown("</aside>", unsafe_allow_html=True)
 
 
 # ---------- Dashboard ----------
