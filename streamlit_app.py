@@ -104,6 +104,59 @@ CSS += """
 </style>
 """
 
+CSS += """
+<style>
+/* ---- Theme tokens (light default) ---- */
+:root{
+  --card-bg: #ffffff;
+  --card-fg: #111827;      /* slate-900 */
+  --card-sub: #6b7280;     /* slate-500 */
+  --card-border: #e5e7eb;  /* slate-200 */
+  --pill-bg: #F4F4F4;
+  --pill-fg: #111827;
+}
+
+/* ---- Dark mode overrides ---- */
+@media (prefers-color-scheme: dark){
+  :root{
+    --card-bg: #111827;    /* slate-900 */
+    --card-fg: #f3f4f6;    /* slate-100 */
+    --card-sub: #cbd5e1;   /* slate-300 */
+    --card-border: #374151;/* slate-700 */
+    --pill-bg: #1f2937;    /* slate-800 */
+    --pill-fg: #f3f4f6;
+  }
+}
+
+/* ---- Apply tokens to cards & pills ---- */
+.score-card{
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: 14px;
+  padding: 14px 16px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+  color: var(--card-fg); /* ensure text contrasts with background */
+}
+.score-val{
+  font-size: 2.2rem;
+  font-weight: 700;
+  color: var(--card-fg) !important; /* big number always visible */
+}
+.score-sub{
+  color: var(--card-sub) !important;
+  font-size: 0.85rem;
+}
+.progress-pill{
+  background: var(--pill-bg);
+  color: var(--pill-fg);
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 0.85rem;
+}
+</style>
+"""
+
+
 
 st.markdown(CSS, unsafe_allow_html=True)
 
@@ -438,82 +491,89 @@ def build_sidebar(default_cfg: DBConfig):
 
 # ---------- Rate topics ----------
 def build_rate_topics(SessionLocal) -> None:
+    """
+    Rate topics UI: compact sticky toolbar for Dimension/Theme selection + breadcrumb/progress,
+    card stack editor on the left, single guidance drawer on the right, and one Save button.
+    Assumes sessions & DB controls live in the sidebar.
+    """
+    # ----- Session gating -----
     session_id = st.session_state.get("session_id")
     if not session_id:
         st.info("Select or create a session from the sidebar to begin rating.")
         return
-    
-    # ---- Dimension/Theme gating in a sticky mini-toolbar ----
+
+    # ----- Sticky mini-toolbar (Dimension / Theme + crumb + progress) -----
     db_url = st.session_state.get("db_url", "")
     df_all = cached_topics_df(SessionLocal, db_url)
 
-    # Open a sticky container wrapper
     st.markdown('<div class="mini-toolbar">', unsafe_allow_html=True)
     c_dim, c_theme, c_meta = st.columns([1, 1, 1])
 
     with c_dim:
         dims = ["— Select —"] + sorted(df_all["Dimension"].unique().tolist())
-        dim = st.selectbox("Dimension", dims, index=0, key="ui_dim_select", label_visibility="collapsed")
+        dim = st.selectbox(
+            "Dimension", dims, index=0, key="ui_dim_select", label_visibility="collapsed"
+        )
         st.caption("Dimension")
 
-    # Build themes based on current dimension (or empty until chosen)
     with c_theme:
         if dim == "— Select —":
             themes = ["— Select —"]
+            df_dim = df_all  # placeholder
         else:
             df_dim = df_all[df_all["Dimension"] == dim]
             themes = ["— Select —"] + sorted(df_dim["Theme"].unique().tolist())
-        theme = st.selectbox("Theme", themes, index=0, key="ui_theme_select", label_visibility="collapsed")
+        theme = st.selectbox(
+            "Theme", themes, index=0, key="ui_theme_select", label_visibility="collapsed"
+        )
         st.caption("Theme")
 
+    # Placeholders we fill once we can compute crumb + progress
     with c_meta:
-        # Placeholder for breadcrumb + progress; we update after we can compute it
         crumbs_ph = st.empty()
         pill_ph = st.empty()
 
-    # Close sticky wrapper
     st.markdown("</div>", unsafe_allow_html=True)
 
-    # Gate on selections (keep early returns but now the controls stay visible in toolbar)
+    # ---- Early exits keep the toolbar visible above ----
     if dim == "— Select —":
         st.info("Choose a Dimension to continue.")
         return
 
-    # Safe because dim was selected
-    df_dim = df_all[df_all["Dimension"] == dim]
-
     if theme == "— Select —":
-        # Show crumbs without a pill yet
         crumbs_ph.markdown(f'<div class="crumbs">{dim}</div>', unsafe_allow_html=True)
         st.info("Choose a Theme to start rating topics.")
         return
 
-    # ---- Build view for the chosen Theme ----
+    # ---- Build Theme view ----
     df = df_dim[df_dim["Theme"] == theme]
     topic_ids_in_view = df["TopicID"].astype(int).tolist()
     if not topic_ids_in_view:
         crumbs_ph.markdown(f'<div class="crumbs">{dim} › {theme}</div>', unsafe_allow_html=True)
-        pill_ph.markdown("")  # nothing to show
+        pill_ph.markdown("")
         st.info("No topics match the current selection.")
         return
 
-    # Prefetch entries and labels
+    # Prefetch entries & labels
     with SessionLocal() as s:
         entries = (
             s.query(AssessmentEntryORM)
-            .filter(
-                AssessmentEntryORM.session_id == session_id,
-                AssessmentEntryORM.topic_id.in_(topic_ids_in_view),
-            )
-            .all()
+             .filter(
+                 AssessmentEntryORM.session_id == session_id,
+                 AssessmentEntryORM.topic_id.in_(topic_ids_in_view),
+             )
+             .all()
         )
         current_by_tid = {e.topic_id: e for e in entries}
         rating_labels = {
-            r.level: r.label for r in s.query(RatingScaleORM).order_by(RatingScaleORM.level)
+            r.level: r.label
+            for r in s.query(RatingScaleORM).order_by(RatingScaleORM.level)
         }
 
-    # Cached guidance index
-    guidance_index = cached_explanations_for(SessionLocal, db_url, tuple(topic_ids_in_view))
+    # Cached guidance lookup: {topic_id: {level: [bullets...]}}
+    guidance_index = cached_explanations_for(
+        SessionLocal, db_url, tuple(topic_ids_in_view)
+    )
 
     # Progress (N/A does not count)
     def current_ui_or_db_rating(tid: int) -> Optional[int]:
@@ -529,92 +589,26 @@ def build_rate_topics(SessionLocal) -> None:
     total_topics = len(topic_ids_in_view)
     pct = (rated_count / total_topics) * 100 if total_topics else 0.0
 
-    # ✅ Update the sticky toolbar meta now that we can compute it
+    # Update toolbar crumb + pill now that we can compute them
     crumbs_ph.markdown(f'<div class="crumbs">{dim} › {theme}</div>', unsafe_allow_html=True)
     pill_ph.markdown(f'<div class="pill">{pct:.0f}% topics rated</div>', unsafe_allow_html=True)
 
-
-    # # ---- Dimension/Theme gating ----
-    # db_url = st.session_state.get("db_url", "")
-    # df_all = cached_topics_df(SessionLocal, db_url)
-
-    # dims = ["— Select —"] + sorted(df_all["Dimension"].unique().tolist())
-    # dim = st.selectbox("Dimension", dims, index=0, key="ui_dim_select")
-
-    # if dim == "— Select —":
-    #     st.info("Choose a Dimension to continue.")
-    #     return
-
-    # df_dim = df_all[df_all["Dimension"] == dim]
-    # themes = ["— Select —"] + sorted(df_dim["Theme"].unique().tolist())
-    # theme = st.selectbox("Theme", themes, index=0, key="ui_theme_select")
-
-    # if theme == "— Select —":
-    #     st.info("Choose a Theme to start rating topics.")
-    #     return
-
-    # # ---- Build view for the chosen Theme ----
-    # df = df_dim[df_dim["Theme"] == theme]
-    # topic_ids_in_view = df["TopicID"].astype(int).tolist()
-    # if not topic_ids_in_view:
-    #     st.info("No topics match the current selection.")
-    #     return
-
-    # # Prefetch entries and labels
-    # with SessionLocal() as s:
-    #     entries = (
-    #         s.query(AssessmentEntryORM)
-    #         .filter(
-    #             AssessmentEntryORM.session_id == session_id,
-    #             AssessmentEntryORM.topic_id.in_(topic_ids_in_view),
-    #         )
-    #         .all()
-    #     )
-    #     current_by_tid = {e.topic_id: e for e in entries}
-    #     rating_labels = {
-    #         r.level: r.label for r in s.query(RatingScaleORM).order_by(RatingScaleORM.level)
-    #     }
-
-    # guidance_index = cached_explanations_for(SessionLocal, db_url, tuple(topic_ids_in_view))
-
-    # # Progress (N/A does not count)
-    # def current_ui_or_db_rating(tid: int) -> Optional[int]:
-    #     key = f"rating_{tid}"
-    #     if key in st.session_state and isinstance(st.session_state[key], int):
-    #         return int(st.session_state[key])
-    #     e = current_by_tid.get(tid)
-    #     if e and (not e.is_na) and e.rating_level is not None:
-    #         return int(e.rating_level)
-    #     return None
-
-    # rated_count = sum(1 for tid in topic_ids_in_view if current_ui_or_db_rating(tid) is not None)
-    # total_topics = len(topic_ids_in_view)
-    # pct = (rated_count / total_topics) * 100 if total_topics else 0.0
-
-    # st.markdown(
-    #     f"""
-    #     <div class="workspace-header">
-    #       <div><strong>{dim}</strong> › <strong>{theme}</strong></div>
-    #       <div class="progress-pill">{pct:.0f}% topics rated</div>
-    #     </div>
-    #     """,
-    #     unsafe_allow_html=True,
-    # )
-
+    # ----- Layout: cards (left) + single guidance drawer (right) -----
     left, right = st.columns([2, 1], gap="large")
 
-    # Manage focused topic ID
+    # Manage focused topic ID for the drawer
     focused_key = "focused_topic_id"
     if focused_key not in st.session_state or int(st.session_state[focused_key]) not in topic_ids_in_view:
         st.session_state[focused_key] = int(topic_ids_in_view[0])
 
     with left:
-        # Unrated-first visual ordering to speed completion
+        # Unrated-first ordering to speed completion
         def sort_key(row):
             tid = int(row["TopicID"])
             return 0 if current_ui_or_db_rating(tid) is None else 1
 
-        df_sorted = df.sort_values(by=["Theme", "Topic"]).sort_values(
+        # Sort by unrated first, then by Topic for stable order
+        df_sorted = df.sort_values(by="Topic").sort_values(
             by="TopicID",
             key=lambda col: [sort_key(df.loc[df["TopicID"] == x].iloc[0]) for x in col],
         )
@@ -623,7 +617,7 @@ def build_rate_topics(SessionLocal) -> None:
             tid = int(r["TopicID"])
             e = current_by_tid.get(tid)
 
-            # default selection prioritizes UI value, then DB, else N/A
+            # Default selection: UI value → DB value → "N/A"
             if f"rating_{tid}" in st.session_state:
                 default_val = st.session_state[f"rating_{tid}"]
             elif e and not e.is_na and e.rating_level is not None:
@@ -631,11 +625,13 @@ def build_rate_topics(SessionLocal) -> None:
             else:
                 default_val = "N/A"
 
-            # preview hint uses current level's first bullet
+            # Single-line hint using current level's first bullet
             preview = guidance_preview_for(tid, default_val, guidance_index)
 
             with st.container(border=False):
-                st.markdown(f'<article class="topic-card" aria-labelledby="t{tid}">', unsafe_allow_html=True)
+                st.markdown(
+                    f'<article class="topic-card" aria-labelledby="t{tid}">', unsafe_allow_html=True
+                )
                 st.markdown(f'<h3 id="t{tid}">{r["Topic"]}</h3>', unsafe_allow_html=True)
 
                 c1, c2 = st.columns([1, 1])
@@ -654,7 +650,9 @@ def build_rate_topics(SessionLocal) -> None:
                     st.markdown('<label for="comment">Comment</label>', unsafe_allow_html=True)
                     st.text_area(
                         "Comment",
-                        value=st.session_state.get(f"comment_{tid}", (e.comment if e and e.comment else "")),
+                        value=st.session_state.get(
+                            f"comment_{tid}", (e.comment if e and e.comment else "")
+                        ),
                         key=f"comment_{tid}",
                         height=70,
                     )
@@ -664,7 +662,7 @@ def build_rate_topics(SessionLocal) -> None:
 
                 st.markdown("</article>", unsafe_allow_html=True)
 
-        # Save all topics set in UI (across dataset); untouched topics remain unchanged
+        # Save all topics set in UI (across the dataset); untouched topics stay unchanged
         if st.button("💾 Save assessment (all topics)", key="save_assessment_all"):
             with SessionLocal() as s2:
                 df_all_topics = cached_topics_df(SessionLocal, db_url)
@@ -680,6 +678,7 @@ def build_rate_topics(SessionLocal) -> None:
                         is_na, cmmi = True, None
                     else:
                         is_na, cmmi = False, int(val)
+
                     record_rating(
                         s2,
                         session_id=session_id,
@@ -689,20 +688,28 @@ def build_rate_topics(SessionLocal) -> None:
                         comment=comment_val or None,
                     )
                 s2.commit()
+            # Clear caches so previews/coverage refresh immediately
             cached_topics_df.clear()
             cached_explanations_for.clear()
             st.success("Assessment saved.")
 
     with right:
-        st.markdown('<aside class="drawer" role="region" aria-label="Full guidance">', unsafe_allow_html=True)
-        focus_tid = int(st.session_state["focused_topic_id"])
+        st.markdown(
+            '<aside class="drawer" role="region" aria-label="Full guidance">', unsafe_allow_html=True
+        )
+        focus_tid = int(st.session_state[focused_key])
         title = df[df["TopicID"] == focus_tid]["Topic"].iloc[0]
         st.markdown(f"<h2>Full guidance — {title}</h2>", unsafe_allow_html=True)
 
+        # Highlight the currently selected level (UI first, then DB)
         current_val = st.session_state.get(f"rating_{focus_tid}", None)
         if not isinstance(current_val, int):
             ee = current_by_tid.get(focus_tid)
-            current_val = (int(ee.rating_level) if ee and not ee.is_na and ee.rating_level is not None else None)
+            current_val = (
+                int(ee.rating_level)
+                if ee and not ee.is_na and ee.rating_level is not None
+                else None
+            )
 
         for lvl in [1, 2, 3, 4, 5]:
             bullets = guidance_index.get(focus_tid, {}).get(lvl, [])
@@ -710,7 +717,9 @@ def build_rate_topics(SessionLocal) -> None:
                 continue
             label = rating_labels.get(lvl, str(lvl))
             css_class = "level-title is-current" if current_val == lvl else "level-title"
-            st.markdown(f'<h3 class="{css_class}">{lvl} — {label}</h3>', unsafe_allow_html=True)
+            st.markdown(
+                f'<h3 class="{css_class}">{lvl} — {label}</h3>', unsafe_allow_html=True
+            )
             for b in bullets[:10]:
                 st.markdown(f"- {b}")
         st.markdown("</aside>", unsafe_allow_html=True)
@@ -732,7 +741,8 @@ def build_dashboard(SessionLocal) -> None:
         cols = st.columns(3)
         for i, rec in enumerate(dim_avgs):
             with cols[i % 3]:
-                val = "-" if math.isnan(rec.average) else f"{rec.average:.2f}"
+                avg = float(rec.average) if rec.average is not None else float('nan')
+                val = "-" if math.isnan(avg) else f"{avg:.2f}"
                 st.markdown(
                     f"""
                     <div class="score-card">
