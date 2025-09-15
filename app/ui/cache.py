@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import Dict, List, Tuple
+
 import pandas as pd
 import streamlit as st
 
@@ -15,7 +15,9 @@ def cached_topics_df(_SessionLocal, db_url: str) -> pd.DataFrame:
 
 
 @st.cache_data(ttl=300, show_spinner=False)
-def cached_explanations_for(_SessionLocal, db_url: str, topic_ids: Tuple[int, ...]) -> Dict[int, Dict[int, List[str]]]:
+def cached_explanations_for(
+    _SessionLocal, db_url: str, topic_ids: tuple[int, ...]
+) -> dict[int, dict[int, list[str]]]:
     """{topic_id: {level: [bullets]}} for provided topic ids."""
     if not topic_ids:
         return {}
@@ -26,7 +28,7 @@ def cached_explanations_for(_SessionLocal, db_url: str, topic_ids: Tuple[int, ..
             .order_by(ExplanationORM.topic_id, ExplanationORM.level, ExplanationORM.id)
             .all()
         )
-    out: Dict[int, Dict[int, List[str]]] = {}
+    out: dict[int, dict[int, list[str]]] = {}
     for tid, lvl, txt in rows:
         out.setdefault(int(tid), {}).setdefault(int(lvl), []).append(txt)
     return out

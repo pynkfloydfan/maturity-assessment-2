@@ -1,7 +1,8 @@
 from __future__ import annotations
-from typing import Any, Dict
+
 import io
 import json
+
 import pandas as pd
 
 
@@ -14,7 +15,9 @@ def _to_iso(val):
     return val
 
 
-def make_json_export_payload(session_id: int, topics_df: pd.DataFrame, entries_df: pd.DataFrame) -> str:
+def make_json_export_payload(
+    session_id: int, topics_df: pd.DataFrame, entries_df: pd.DataFrame
+) -> str:
     payload = {
         "session_id": session_id,
         "topics": topics_df.to_dict(orient="records"),

@@ -1,23 +1,23 @@
 from __future__ import annotations
+
 from pathlib import Path
-from typing import Tuple, List, Dict
 
 import streamlit as st
 from sqlalchemy.exc import OperationalError
 
-from app.infrastructure.db import DBConfig, build_connection_url, make_engine_and_session
-from app.infrastructure.models import Base
-from app.infrastructure.uow import UnitOfWork
+from app.infrastructure.config import DatabaseConfig
+from app.infrastructure.db import make_engine_and_session
 from app.infrastructure.repositories import SessionRepo
+from app.infrastructure.uow import UnitOfWork
 from app.ui.state_keys import DB_URL, SESSION_ID
 from app.utils.seed import initialise_database, seed_database_from_excel
 
 
-def fetch_sessions(SessionLocal) -> tuple[List[Dict], bool]:
+def fetch_sessions(SessionLocal) -> tuple[list[dict], bool]:
     """Return (sessions_as_primitives, db_uninitialized)."""
     try:
         with UnitOfWork(SessionLocal).begin() as s:
-            raw = SessionRepo(s).list()
+            raw = SessionRepo(s).list_all()
             sessions = [{"id": sess.id, "name": sess.name} for sess in raw]
         return sessions, False
     except OperationalError as e:
@@ -26,7 +26,7 @@ def fetch_sessions(SessionLocal) -> tuple[List[Dict], bool]:
         raise
 
 
-def build_sidebar(default_cfg: DBConfig):
+def build_sidebar(default_cfg: DatabaseConfig):
     # ── ① Database & Dataset
     with st.sidebar.expander("① Database & Dataset", expanded=True):
         backend_choice = st.radio(
@@ -43,18 +43,23 @@ def build_sidebar(default_cfg: DBConfig):
                 value=default_cfg.sqlite_path or "./resilience.db",
                 key="sqlite_path_input",
             )
-            cfg = DBConfig(backend="sqlite", sqlite_path=sqlite_path)
+            cfg = DatabaseConfig(backend="sqlite", sqlite_path=sqlite_path)
         else:
             host = st.text_input("Host", value=default_cfg.mysql_host or "localhost")
             port = st.number_input("Port", value=int(default_cfg.mysql_port or 3306), step=1)
             user = st.text_input("User", value=default_cfg.mysql_user or "root")
             pw = st.text_input("Password", value=default_cfg.mysql_password or "", type="password")
-            dbname = st.text_input("Database", value=default_cfg.mysql_db or "resilience")
-            cfg = DBConfig(
-                backend="mysql", mysql_host=host, mysql_port=int(port), mysql_user=user, mysql_password=pw, mysql_db=dbname
+            dbname = st.text_input("Database", value=default_cfg.mysql_database or "resilience")
+            cfg = DatabaseConfig(
+                backend="mysql",
+                mysql_host=host,
+                mysql_port=int(port),
+                mysql_user=user,
+                mysql_password=pw,
+                mysql_database=dbname,
             )
 
-        url = build_connection_url(cfg)
+        url = cfg.get_connection_url()
         engine, SessionLocal = make_engine_and_session(url)
         st.session_state[DB_URL] = url
 
@@ -102,7 +107,7 @@ def build_sidebar(default_cfg: DBConfig):
 
             # Create / Use assessment
             st.subheader("Create / Use Assessment")
-            from app.application.api import upsert_assessment_session
+            from app.application.api import create_assessment_session
 
             with st.form("session_form_sidebar", clear_on_submit=False):
                 name = st.text_input("Session name", value="Baseline Assessment", key="form_name")
@@ -113,7 +118,7 @@ def build_sidebar(default_cfg: DBConfig):
 
             if submitted:
                 with SessionLocal() as s:
-                    sess = upsert_assessment_session(
+                    sess = create_assessment_session(
                         s, name=name, assessor=assessor, organization=org, notes=notes
                     )
                     s.commit()
@@ -123,19 +128,28 @@ def build_sidebar(default_cfg: DBConfig):
             st.markdown("---")
             with st.expander("Combine sessions → master session", expanded=False):
                 from app.application.api import combine_sessions_to_master
+
                 if sessions:
                     multi_labels = [f"#{x['id']} — {x['name']}" for x in sessions]
-                    selected = st.multiselect("Source sessions", multi_labels, default=[], key="combine_sources")
-                    name_master = st.text_input("Master session name", value="Combined Assessment", key="combine_name")
+                    selected = st.multiselect(
+                        "Source sessions", multi_labels, default=[], key="combine_sources"
+                    )
+                    name_master = st.text_input(
+                        "Master session name", value="Combined Assessment", key="combine_name"
+                    )
                     if st.button("Create master session", key="btn_create_master"):
                         source_ids = [int(lbl.split("—")[0].strip()[1:]) for lbl in selected]
                         if not source_ids:
                             st.warning("Pick at least one source session.")
                         else:
                             with UnitOfWork(SessionLocal).begin() as s:
-                                master = combine_sessions_to_master(s, source_session_ids=source_ids, name=name_master)
+                                master = combine_sessions_to_master(
+                                    s, source_session_ids=source_ids, name=name_master
+                                )
                                 st.session_state[SESSION_ID] = master.id
-                                st.success(f"Created master session #{master.id}: {master.name} (now active)")
+                                st.success(
+                                    f"Created master session #{master.id}: {master.name} (now active)"
+                                )
                 else:
                     st.info("No sessions available to combine.")
 

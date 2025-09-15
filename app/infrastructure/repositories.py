@@ -1,90 +1,152 @@
+"""
+Improved repository classes with comprehensive validation, error handling, and logging.
+
+This module provides data access layer implementations with:
+- Pydantic validation for all inputs
+- Structured error handling with custom exceptions
+- Comprehensive logging and monitoring
+- Optimized database queries with eager loading
+- Consistent patterns across all repositories
+"""
+
 from __future__ import annotations
-from typing import Iterable, Optional
+
+from sqlalchemy.exc import IntegrityError as SQLIntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
-from .models import (
-    DimensionORM, ThemeORM, TopicORM, AssessmentSessionORM, AssessmentEntryORM, RatingScaleORM, ExplanationORM
+
+from .exceptions import (
+    ValidationError,
+    handle_database_error,
 )
+from .logging import get_logger, log_database_operation
+from .models import (
+    ExplanationORM,
+)
+from .repositories_dimension import DimensionRepo  # re-export
+from .repositories_entry import EntryRepo
+from .repositories_ratingscale import RatingScaleRepo  # re-export
 
-class DimensionRepo:
-    def __init__(self, s: Session):
-        self.s = s
-    def get_by_name(self, name: str) -> Optional[DimensionORM]:
-        return self.s.query(DimensionORM).filter_by(name=name).one_or_none()
-    def add(self, dim: DimensionORM):
-        self.s.add(dim)
-    def list(self) -> list[DimensionORM]:
-        return self.s.query(DimensionORM).order_by(DimensionORM.name).all()
+# Re-export split repositories so existing imports keep working:
+#   from app.infrastructure.repositories import SessionRepo, ...
+from .repositories_session import SessionRepo  # re-export
+from .repositories_theme import ThemeRepo  # re-export
+from .repositories_topic import TopicRepo  # re-export
 
-class ThemeRepo:
-    def __init__(self, s: Session):
-        self.s = s
-    def get_by_name(self, dimension_id: int, name: str) -> Optional[ThemeORM]:
-        return self.s.query(ThemeRepo.model()).filter_by(dimension_id=dimension_id, name=name).one_or_none()
-    @staticmethod
-    def model():
-        return ThemeORM
-    def add(self, theme: ThemeORM):
-        self.s.add(theme)
-    def list_by_dimension(self, dimension_id: int) -> list[ThemeORM]:
-        return self.s.query(ThemeORM).filter_by(dimension_id=dimension_id).order_by(ThemeORM.name).all()
+# Tell linters/formatters these imports are intentional (exported API)
+__all__ = [
+    "SessionRepo",
+    "DimensionRepo",
+    "ThemeRepo",
+    "TopicRepo",
+    "RatingScaleRepo",
+    "EntryRepo",
+]
 
-class TopicRepo:
-    def __init__(self, s: Session):
-        self.s = s
-    def get_by_name(self, theme_id: int, name: str) -> Optional[TopicORM]:
-        return self.s.query(TopicORM).filter_by(theme_id=theme_id, name=name).one_or_none()
-    def add(self, topic: TopicORM):
-        self.s.add(topic)
-    def list_by_theme(self, theme_id: int) -> list[TopicORM]:
-        return self.s.query(TopicORM).filter_by(theme_id=theme_id).order_by(TopicORM.name).all()
 
-class RatingScaleRepo:
-    def __init__(self, s: Session):
-        self.s = s
-    def upsert(self, level: int, label: str):
-        obj = self.s.get(RatingScaleORM, level)
-        if obj is None:
-            obj = RatingScaleORM(level=level, label=label)
-            self.s.add(obj)
-        else:
-            obj.label = label
-        return obj
-    def all(self) -> list[RatingScaleORM]:
-        return self.s.query(RatingScaleORM).order_by(RatingScaleORM.level).all()
+class BaseRepository:
+    """
+    Base repository class with common functionality and error handling.
 
-class ExplanationRepo:
-    def __init__(self, s: Session):
-        self.s = s
-    def add(self, exp: ExplanationORM):
-        self.s.add(exp)
+    Provides consistent patterns for database operations, error handling,
+    and logging across all repository classes.
+
+    Example:
+        >>> repo = DimensionRepo(session)
+        >>> dimensions = repo.list()
+    """
+
+    def __init__(self, session: Session):
+        """
+        Initialize repository with database session.
+
+        Args:
+            session: SQLAlchemy session instance
+        """
+        self.session = session
+        self.logger = get_logger(self.__class__.__name__)
+
+    def _handle_error(self, error: Exception, operation: str) -> None:
+        """
+        Convert database errors to application-specific exceptions.
+
+        Args:
+            error: Original database error
+            operation: Description of the operation that failed
+
+        Raises:
+            Appropriate application exception
+        """
+        db_error = handle_database_error(error, operation)
+        self.logger.error(f"Database error in {operation}: {str(error)}", exc_info=True)
+        raise db_error
+
+
+class ExplanationRepo(BaseRepository):
+    """
+    Repository for explanation-related database operations.
+
+    Handles CRUD operations for topic-level explanations
+    with proper validation and error handling.
+
+    Example:
+        >>> repo = ExplanationRepo(session)
+        >>> explanations = repo.list_for_topic(topic_id=123)
+        >>> for exp in explanations:
+        ...     print(f"Level {exp.level}: {exp.text[:50]}...")
+    """
+
+    @log_database_operation("create_explanation")
+    def create(self, topic_id: int, level: int, text: str) -> ExplanationORM:
+        """
+        Create new explanation.
+
+        Args:
+            topic_id: Parent topic ID
+            level: CMMI level this explanation applies to
+            text: Explanation text
+
+        Returns:
+            Created ExplanationORM instance
+        """
+        # Validate input using schema
+        from ..domain.schemas import ExplanationInput
+
+        validated_data = ExplanationInput(topic_id=topic_id, level=level, text=text)
+
+        try:
+            explanation = ExplanationORM(
+                topic_id=validated_data.topic_id,
+                level=validated_data.level,
+                text=validated_data.text,
+            )
+            self.session.add(explanation)
+            self.session.flush()
+            return explanation
+        except SQLIntegrityError as e:
+            self._handle_error(e, "create_explanation")
+        except SQLAlchemyError as e:
+            self._handle_error(e, "create_explanation")
+
+    @log_database_operation("list_explanations_for_topic")
     def list_for_topic(self, topic_id: int) -> list[ExplanationORM]:
-        return self.s.query(ExplanationORM).filter_by(topic_id=topic_id).order_by(ExplanationORM.level, ExplanationORM.id).all()
+        """
+        Get all explanations for a topic.
 
-class SessionRepo:
-    def __init__(self, s: Session):
-        self.s = s
-    def create(self, name: str, assessor: str | None, organization: str | None, notes: str | None) -> AssessmentSessionORM:
-        obj = AssessmentSessionORM(name=name, assessor=assessor, organization=organization, notes=notes)
-        self.s.add(obj)
-        self.s.flush()
-        return obj
-    def get(self, session_id: int) -> AssessmentSessionORM | None:
-        return self.s.get(AssessmentSessionORM, session_id)
-    def list(self) -> list[AssessmentSessionORM]:
-        return self.s.query(AssessmentSessionORM).order_by(AssessmentSessionORM.created_at.desc()).all()
+        Args:
+            topic_id: Topic ID to filter by
 
-class EntryRepo:
-    def __init__(self, s: Session):
-        self.s = s
-    def upsert(self, session_id: int, topic_id: int, rating_level: int | None, is_na: bool, comment: str | None):
-        obj = self.s.query(AssessmentEntryORM).filter_by(session_id=session_id, topic_id=topic_id).one_or_none()
-        if obj is None:
-            obj = AssessmentEntryORM(session_id=session_id, topic_id=topic_id)
-            self.s.add(obj)
-        obj.rating_level = rating_level
-        obj.is_na = bool(is_na)
-        obj.comment = comment
-        self.s.flush()
-        return obj
-    def list_for_session(self, session_id: int) -> list[AssessmentEntryORM]:
-        return self.s.query(AssessmentEntryORM).filter_by(session_id=session_id).all()
+        Returns:
+            List of ExplanationORM instances ordered by level
+        """
+        if topic_id <= 0:
+            raise ValidationError("topic_id", "Topic ID must be positive")
+
+        try:
+            return (
+                self.session.query(ExplanationORM)
+                .filter_by(topic_id=topic_id)
+                .order_by(ExplanationORM.level, ExplanationORM.id)
+                .all()
+            )
+        except SQLAlchemyError as e:
+            self._handle_error(e, "list_explanations_for_topic")

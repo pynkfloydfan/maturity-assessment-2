@@ -1,15 +1,12 @@
 from __future__ import annotations
-from typing import Optional
 
-import pandas as pd
 import streamlit as st
 
+from app.application.api import record_topic_rating as record_rating
 from app.infrastructure.models import AssessmentEntryORM, RatingScaleORM
-from app.application.api import record_rating
-from app.ui.cache import cached_topics_df, cached_explanations_for
-from app.ui.state_keys import DB_URL, SESSION_ID, FOCUSED_TOPIC_ID
+from app.ui.cache import cached_explanations_for, cached_topics_df
 from app.ui.components import topic_card
-
+from app.ui.state_keys import DB_URL, FOCUSED_TOPIC_ID, SESSION_ID
 
 RATING_OPTIONS = ["N/A", 1, 2, 3, 4, 5]
 
@@ -30,7 +27,9 @@ def build_rate_topics(SessionLocal) -> None:
 
     with c_dim:
         dims = ["— Select —"] + sorted(df_all["Dimension"].unique().tolist())
-        dim = st.selectbox("Dimension", dims, index=0, key="ui_dim_select", label_visibility="collapsed")
+        dim = st.selectbox(
+            "Dimension", dims, index=0, key="ui_dim_select", label_visibility="collapsed"
+        )
         st.caption("Dimension")
 
     with c_theme:
@@ -40,7 +39,9 @@ def build_rate_topics(SessionLocal) -> None:
         else:
             df_dim = df_all[df_all["Dimension"] == dim]
             themes = ["— Select —"] + sorted(df_dim["Theme"].unique().tolist())
-        theme = st.selectbox("Theme", themes, index=0, key="ui_theme_select", label_visibility="collapsed")
+        theme = st.selectbox(
+            "Theme", themes, index=0, key="ui_theme_select", label_visibility="collapsed"
+        )
         st.caption("Theme")
 
     with c_meta:
@@ -71,16 +72,19 @@ def build_rate_topics(SessionLocal) -> None:
     with SessionLocal() as s:
         entries = (
             s.query(AssessmentEntryORM)
-            .filter(AssessmentEntryORM.session_id == session_id, AssessmentEntryORM.topic_id.in_(topic_ids_in_view))
+            .filter(
+                AssessmentEntryORM.session_id == session_id,
+                AssessmentEntryORM.topic_id.in_(topic_ids_in_view),
+            )
             .all()
         )
         current_by_tid = {e.topic_id: e for e in entries}
-        rating_labels = {r.level: r.label for r in s.query(RatingScaleORM).order_by(RatingScaleORM.level)}
+        {r.level: r.label for r in s.query(RatingScaleORM).order_by(RatingScaleORM.level)}
 
     guidance_index = cached_explanations_for(SessionLocal, db_url, tuple(topic_ids_in_view))
 
     # Progress (N/A does not count)
-    def current_ui_or_db_rating(tid: int) -> Optional[int]:
+    def current_ui_or_db_rating(tid: int) -> int | None:
         key = f"rating_{tid}"
         if key in st.session_state and isinstance(st.session_state[key], int):
             return int(st.session_state[key])
@@ -100,7 +104,10 @@ def build_rate_topics(SessionLocal) -> None:
     left, right = st.columns([2, 1], gap="large")
 
     # Focused topic for the guidance drawer
-    if FOCUSED_TOPIC_ID not in st.session_state or int(st.session_state[FOCUSED_TOPIC_ID]) not in topic_ids_in_view:
+    if (
+        FOCUSED_TOPIC_ID not in st.session_state
+        or int(st.session_state[FOCUSED_TOPIC_ID]) not in topic_ids_in_view
+    ):
         st.session_state[FOCUSED_TOPIC_ID] = int(topic_ids_in_view[0])
 
     with left:
@@ -110,7 +117,8 @@ def build_rate_topics(SessionLocal) -> None:
             return 0 if current_ui_or_db_rating(tid) is None else 1
 
         df_sorted = df.sort_values(by="Topic").sort_values(
-            by="TopicID", key=lambda col: [sort_key(df.loc[df["TopicID"] == x].iloc[0]) for x in col]
+            by="TopicID",
+            key=lambda col: [sort_key(df.loc[df["TopicID"] == x].iloc[0]) for x in col],
         )
 
         for _, r in df_sorted.iterrows():
@@ -125,7 +133,9 @@ def build_rate_topics(SessionLocal) -> None:
             else:
                 default_val = "N/A"
 
-            default_comment = st.session_state.get(f"comment_{tid}", (entry.comment if entry and entry.comment else ""))
+            default_comment = st.session_state.get(
+                f"comment_{tid}", (entry.comment if entry and entry.comment else "")
+            )
 
             topic_card(
                 topic_id=tid,
@@ -158,7 +168,7 @@ def build_rate_topics(SessionLocal) -> None:
                         s2,
                         session_id=session_id,
                         topic_id=ttid,
-                        cmmi_level=cmmi,
+                        rating_level=cmmi,
                         is_na=is_na,
                         comment=comment_val or None,
                     )
@@ -168,7 +178,10 @@ def build_rate_topics(SessionLocal) -> None:
             st.success("Assessment saved.")
 
     with right:
-        st.markdown('<aside class="drawer" role="region" aria-label="Full guidance">', unsafe_allow_html=True)
+        st.markdown(
+            '<aside class="drawer" role="region" aria-label="Full guidance">',
+            unsafe_allow_html=True,
+        )
         focus_tid = int(st.session_state[FOCUSED_TOPIC_ID])
         title = df[df["TopicID"] == focus_tid]["Topic"].iloc[0]
         st.markdown(f"<h2>Full guidance — {title}</h2>", unsafe_allow_html=True)
@@ -177,15 +190,24 @@ def build_rate_topics(SessionLocal) -> None:
         current_val = st.session_state.get(f"rating_{focus_tid}", None)
         if not isinstance(current_val, int):
             ee = current_by_tid.get(focus_tid)
-            current_val = int(ee.rating_level) if ee and not ee.is_na and ee.rating_level is not None else None
+            current_val = (
+                int(ee.rating_level)
+                if ee and not ee.is_na and ee.rating_level is not None
+                else None
+            )
 
         for lvl in [1, 2, 3, 4, 5]:
             bullets = guidance_index.get(focus_tid, {}).get(lvl, [])
             if not bullets:
                 continue
             from app.infrastructure.models import RatingScaleORM as _RatingScaleORM
+
             with SessionLocal() as s3:
-                label = s3.query(_RatingScaleORM).get(lvl).label if s3.query(_RatingScaleORM).get(lvl) else str(lvl)
+                label = (
+                    s3.query(_RatingScaleORM).get(lvl).label
+                    if s3.query(_RatingScaleORM).get(lvl)
+                    else str(lvl)
+                )
             css_class = "level-title is-current" if current_val == lvl else "level-title"
             st.markdown(f'<h3 class="{css_class}">{lvl} — {label}</h3>', unsafe_allow_html=True)
             for b in bullets[:10]:

@@ -1,105 +1,201 @@
 from __future__ import annotations
-from dataclasses import dataclass
-from typing import Optional, Iterable, List
+
+import logging
 import math
+from dataclasses import dataclass
+
+from sqlalchemy import case, func
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
+
+# If your project defines custom exceptions/handlers and you want them here,
+# uncomment and adjust the imports:
 from ..infrastructure.models import (
-    DimensionORM, ThemeORM, TopicORM, AssessmentEntryORM, RatingScaleORM
+    AssessmentEntryORM,
+    DimensionORM,
+    ThemeORM,
+    TopicORM,
 )
 
-def clamp_rating(level: Optional[int]) -> Optional[int]:
+
+def clamp_rating(level: int | None) -> int | None:
     if level is None:
         return None
     if not (1 <= level <= 5):
         raise ValueError("Rating must be between 1 and 5 inclusive.")
     return int(level)
 
+
 @dataclass
 class AverageResult:
     id: int
     name: str
-    average: float   # float('nan') if no rated data
+    average: float  # float('nan') if no rated data
     coverage: float  # 0..1 proportion
 
-class ScoringService:
-    def __init__(self, s: Session):
-        self.s = s
 
-    def compute_theme_averages(self, session_id: int) -> List[AverageResult]:
-        """Per-theme average for a session.
+class ScoringService:
+    def __init__(self, s: Session, logger: logging.Logger | None = None):
+        self.s = s
+        self.logger = logger or logging.getLogger(__name__)
+
+    def compute_theme_averages(self, session_id: int) -> list[AverageResult]:
+        """
+        Per-theme average for a session via a single aggregated query.
         - Average uses COALESCE(computed_score, rating_level).
         - Excludes entries with is_na=True.
         - coverage = rated_topics / total_topics in theme.
+        - Includes themes with zero topics (avg=NaN, coverage=0.0).
         """
-        themes = self.s.query(ThemeORM.id, ThemeORM.name).order_by(ThemeORM.name).all()
-        results: List[AverageResult] = []
-
-        for theme_id, theme_name in themes:
-            # Total topics under this theme
-            total_topics = (
-                self.s.query(TopicORM.id)
-                .filter(TopicORM.theme_id == theme_id)
-                .count()
-            )
-
-            if total_topics == 0:
-                results.append(AverageResult(theme_id, theme_name, float("nan"), 0.0))
-                continue
-
-            # Pull entries for this session+theme, excluding N/A
-            entries = (
-                self.s.query(AssessmentEntryORM)
-                .join(TopicORM, TopicORM.id == AssessmentEntryORM.topic_id)
-                .filter(
-                    AssessmentEntryORM.session_id == session_id,
-                    TopicORM.theme_id == theme_id,
-                    AssessmentEntryORM.is_na == False,
+        try:
+            # Total topics per theme (subquery)
+            total_topics_sq = (
+                self.s.query(
+                    TopicORM.theme_id.label("theme_id"),
+                    func.count(TopicORM.id).label("total_topics"),
                 )
-                .all()
+                .group_by(TopicORM.theme_id)
+                .subquery()
             )
 
-            rated_vals = []
-            for e in entries:
-                # Fallback to rating_level if computed_score is None
-                v = e.computed_score if e.computed_score is not None else e.rating_level
-                if v is not None:
-                    rated_vals.append(float(v))
+            # Score expression: prefer computed_score, fallback to rating_level
+            score_expr = func.coalesce(
+                AssessmentEntryORM.computed_score,
+                AssessmentEntryORM.rating_level,
+            )
 
-            coverage = len(rated_vals) / total_topics if total_topics else 0.0
-            avg = sum(rated_vals) / len(rated_vals) if rated_vals else float("nan")
-            results.append(AverageResult(theme_id, theme_name, avg, coverage))
+            # Count only rated entries that are not N/A and have a score
+            rated_count_expr = func.coalesce(
+                func.sum(
+                    case(
+                        (
+                            (AssessmentEntryORM.is_na.is_(False)) & (score_expr.isnot(None)),
+                            1,
+                        ),
+                        else_=0,
+                    )
+                ),
+                0,
+            ).label("rated_count")
 
-        return results
+            # Average only over non-N/A scores; else NULL which we translate to NaN
+            avg_expr = func.avg(
+                case(
+                    ((AssessmentEntryORM.is_na.is_(False)), score_expr),
+                    else_=None,
+                )
+            ).label("avg_score")
 
-    def compute_dimension_averages(self, session_id: int) -> List[AverageResult]:
-        """Per-dimension average = mean of theme averages (excluding NaNs).
-        coverage = mean(theme.coverage) across themes in the dimension.
+            # Aggregate per theme, preserving themes with no topics/entries
+            q = (
+                self.s.query(
+                    ThemeORM.id.label("theme_id"),
+                    ThemeORM.name.label("theme_name"),
+                    ThemeORM.dimension_id.label("dimension_id"),
+                    func.coalesce(total_topics_sq.c.total_topics, 0).label("total_topics"),
+                    rated_count_expr,
+                    avg_expr,
+                )
+                .outerjoin(total_topics_sq, total_topics_sq.c.theme_id == ThemeORM.id)
+                .outerjoin(TopicORM, TopicORM.theme_id == ThemeORM.id)
+                .outerjoin(
+                    AssessmentEntryORM,
+                    (AssessmentEntryORM.topic_id == TopicORM.id)
+                    & (AssessmentEntryORM.session_id == session_id),
+                )
+                .group_by(
+                    ThemeORM.id,
+                    ThemeORM.name,
+                    ThemeORM.dimension_id,
+                    total_topics_sq.c.total_topics,
+                )
+                .order_by(ThemeORM.name)
+            )
+
+            rows = q.all()
+            results: list[AverageResult] = []
+
+            for theme_id, theme_name, _dimension_id, total_topics, rated_count, avg_score in rows:
+                total_topics = int(total_topics or 0)
+                rated_count = int(rated_count or 0)
+                coverage = (rated_count / total_topics) if total_topics else 0.0
+                avg = float(avg_score) if avg_score is not None else float("nan")
+                results.append(AverageResult(theme_id, theme_name, avg, coverage))
+
+            self.logger.debug(
+                "Computed theme aggregates for session %s: %d themes", session_id, len(results)
+            )
+            return results
+
+        except SQLAlchemyError:
+            self.logger.exception(
+                "Database error computing theme averages for session %s", session_id
+            )
+            raise
+        except Exception:
+            self.logger.exception(
+                "Unexpected error computing theme averages for session %s", session_id
+            )
+            raise
+
+    def compute_dimension_averages(self, session_id: int) -> list[AverageResult]:
         """
-        dims = self.s.query(DimensionORM.id, DimensionORM.name).order_by(DimensionORM.name).all()
-        theme_results = self.compute_theme_averages(session_id)
+        Per-dimension average/coverage from per-theme aggregates.
+        - Dimension average = mean(theme.average) excluding NaNs.
+        - Dimension coverage = mean(theme.coverage) (equal-weighted across themes).
+        - If a dimension has no themes: avg=NaN, coverage=0.0
+        """
 
-        # Build mapping: dimension_id -> [theme AverageResult]
-        theme_dim_pairs = self.s.query(ThemeORM.id, ThemeORM.dimension_id).all()
-        themes_by_dim: dict[int, list[AverageResult]] = {d_id: [] for (d_id, _) in dims}
-        for theme_id, dim_id in theme_dim_pairs:
-            tr = next((t for t in theme_results if t.id == theme_id), None)
-            if tr:
-                themes_by_dim[dim_id].append(tr)
+        try:
+            # Get per-theme aggregates once
+            theme_results = self.compute_theme_averages(session_id)
 
-        results: List[AverageResult] = []
-        for dim_id, dim_name in dims:
-            ts = themes_by_dim.get(dim_id, [])
-            if not ts:
-                results.append(AverageResult(dim_id, dim_name, float("nan"), 0.0))
-                continue
+            # Map theme -> dimension id from the DB (small query)
+            theme_dim_pairs = self.s.query(ThemeORM.id, ThemeORM.dimension_id).all()
+            theme_to_dim = {tid: did for (tid, did) in theme_dim_pairs}
 
-            # Exclude NaN theme averages when computing the dimension mean
-            theme_avgs = [t.average for t in ts if not math.isnan(t.average)]
-            avg = sum(theme_avgs) / len(theme_avgs) if theme_avgs else float("nan")
+            # Fetch dimension names (for display)
+            dims = (
+                self.s.query(DimensionORM.id, DimensionORM.name).order_by(DimensionORM.name).all()
+            )
 
-            # Coverage is the mean of theme coverages (simple, equal-weighted)
-            coverage = sum(t.coverage for t in ts) / len(ts)
+            # Group themes by dimension
+            themes_by_dim: dict[int, list[AverageResult]] = {d_id: [] for (d_id, _name) in dims}
+            for tr in theme_results:
+                dim_id = theme_to_dim.get(tr.id)
+                if dim_id is not None:
+                    themes_by_dim.setdefault(dim_id, []).append(tr)
 
-            results.append(AverageResult(dim_id, dim_name, avg, coverage))
+            results: list[AverageResult] = []
+            for dim_id, dim_name in dims:
+                ts = themes_by_dim.get(dim_id, [])
+                if not ts:
+                    results.append(AverageResult(dim_id, dim_name, float("nan"), 0.0))
+                    continue
 
-        return results
+                # Exclude NaN averages when computing the mean
+                theme_avgs = [t.average for t in ts if not math.isnan(t.average)]
+                avg = (sum(theme_avgs) / len(theme_avgs)) if theme_avgs else float("nan")
+
+                # Coverage is the simple mean of theme coverages (equal-weighted)
+                coverage = sum(t.coverage for t in ts) / len(ts)
+
+                results.append(AverageResult(dim_id, dim_name, avg, coverage))
+
+            self.logger.info(
+                "Computed dimension averages for session %s: %d dimensions",
+                session_id,
+                len(results),
+            )
+            return results
+
+        except SQLAlchemyError:
+            self.logger.exception(
+                "Database error computing dimension averages for session %s", session_id
+            )
+            raise
+        except Exception:
+            self.logger.exception(
+                "Unexpected error computing dimension averages for session %s", session_id
+            )
+            raise
