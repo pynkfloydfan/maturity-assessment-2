@@ -1,23 +1,21 @@
 from __future__ import annotations
-import io
+
 import math
-import json
-from typing import Tuple
 
 import pandas as pd
 import streamlit as st
 
-from app.infrastructure.models import AssessmentEntryORM
 from app.application.api import (
     compute_dimension_averages,
     compute_theme_averages,
-    export_results,
+    export_session_results as export_results,
     list_dimensions_with_topics,
 )
+from app.infrastructure.models import AssessmentEntryORM
 from app.ui.components import scorecard
 from app.ui.state_keys import SESSION_ID
 from app.utils.exports import make_json_export_payload, make_xlsx_export_bytes
-from app.utils.resilience_radar import make_resilience_radar_with_theme_bars, gradient_color
+from app.utils.resilience_radar import gradient_color, make_resilience_radar_with_theme_bars
 
 
 def build_dashboard(SessionLocal) -> None:
@@ -28,7 +26,7 @@ def build_dashboard(SessionLocal) -> None:
 
     with SessionLocal() as s:
         dim_avgs = compute_dimension_averages(s, session_id=session_id)
-        theme_avgs = compute_theme_averages(s, session_id=session_id)
+        compute_theme_averages(s, session_id=session_id)
 
         # ── Dimension averages + vertical legend (90/10)
         st.subheader("Dimension averages")
@@ -110,7 +108,11 @@ def build_dashboard(SessionLocal) -> None:
         entries = s.query(AssessmentEntryORM).filter_by(session_id=session_id, is_na=False).all()
         ratings_map = {}
         for e in entries:
-            val = float(e.computed_score) if getattr(e, "computed_score", None) is not None else e.rating_level
+            val = (
+                float(e.computed_score)
+                if getattr(e, "computed_score", None) is not None
+                else e.rating_level
+            )
             if val is not None:
                 ratings_map[e.topic_id] = float(val)
 
@@ -119,7 +121,12 @@ def build_dashboard(SessionLocal) -> None:
             score = ratings_map.get(int(r["TopicID"]))
             if score is not None:
                 scores_rows.append(
-                    {"Dimension": r["Dimension"], "Theme": r["Theme"], "Question": r["Topic"], "Score": float(score)}
+                    {
+                        "Dimension": r["Dimension"],
+                        "Theme": r["Theme"],
+                        "Question": r["Topic"],
+                        "Score": float(score),
+                    }
                 )
         scores_df = pd.DataFrame(scores_rows, columns=["Dimension", "Theme", "Question", "Score"])
 

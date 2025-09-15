@@ -1,18 +1,24 @@
 from __future__ import annotations
-from typing import Optional, Dict, List
+
 import streamlit as st
+
 from app.utils.resilience_radar import hex_to_rgb  # reuse for luminance calc
+
 
 def _luminance(hex_color: str) -> float:
     r, g, b = hex_to_rgb(hex_color)
+
     def srgb(u):
         x = u / 255.0
         return x / 12.92 if x <= 0.03928 * 255 else ((x + 0.055) / 1.055) ** 2.4
+
     R, G, B = srgb(r), srgb(g), srgb(b)
     return 0.2126 * R + 0.7152 * G + 0.0722 * B
 
+
 def _auto_fg_for(bg_hex: str) -> str:
     return "#111111" if _luminance(bg_hex) > 0.5 else "#FFFFFF"
+
 
 def scorecard(value_str: str, subtitle: str, *, bg_hex: str | None = None) -> None:
     style = ""
@@ -30,7 +36,9 @@ def scorecard(value_str: str, subtitle: str, *, bg_hex: str | None = None) -> No
     )
 
 
-def guidance_preview_for(tid: int, level_or_na, guidance_index: Dict[int, Dict[int, List[str]]]) -> str:
+def guidance_preview_for(
+    tid: int, level_or_na, guidance_index: dict[int, dict[int, list[str]]]
+) -> str:
     """Return a short single-line hint for current level (first bullet)."""
     if isinstance(level_or_na, int):
         bullets = guidance_index.get(tid, {}).get(level_or_na, [])
@@ -44,7 +52,7 @@ def topic_card(
     topic_title: str,
     default_value,  # "N/A" or int
     default_comment: str,
-    guidance_index: Dict[int, Dict[int, List[str]]],
+    guidance_index: dict[int, dict[int, list[str]]],
     rating_key: str,
     comment_key: str,
     on_focus_key: str,
@@ -55,7 +63,9 @@ def topic_card(
 
     preview = guidance_preview_for(topic_id, default_value, guidance_index)
 
-    st.markdown(f'<article class="topic-card" aria-labelledby="t{topic_id}">', unsafe_allow_html=True)
+    st.markdown(
+        f'<article class="topic-card" aria-labelledby="t{topic_id}">', unsafe_allow_html=True
+    )
     st.markdown(f'<h3 id="t{topic_id}">{topic_title}</h3>', unsafe_allow_html=True)
 
     c1, c2 = st.columns([1, 1])

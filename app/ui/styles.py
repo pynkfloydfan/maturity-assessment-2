@@ -64,5 +64,6 @@ button:focus, select:focus, textarea:focus { outline:3px solid rgba(32,78,138,.3
 </style>
 """
 
+
 def inject() -> None:
     st.markdown(BASE_CSS, unsafe_allow_html=True)

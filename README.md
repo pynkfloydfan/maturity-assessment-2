@@ -74,6 +74,12 @@ streamlit_app.py        # entry
 poetry run pytest -q
 ```
 
+## Scripts
+Scripts are setup in pyproject.toml. Current scripts are:
+poetry run lint app
+poetry run format app
+poetry run typecheck
+
 ## Notes / Assumptions
 - Rating scale levels & labels are **derived from Excel column headers** (e.g., `1 Initial`, `2 Managed`, ...). No weights in the dataset → equal weighting.
 - Multiple assessment sessions supported (name, assessor, organization, notes).
