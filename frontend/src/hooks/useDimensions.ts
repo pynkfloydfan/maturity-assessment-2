@@ -24,5 +24,13 @@ export function useDimensions() {
     fetchDimensions();
   }, [fetchDimensions]);
 
+  useEffect(() => {
+    const handler = () => {
+      fetchDimensions();
+    };
+    window.addEventListener("focus", handler);
+    return () => window.removeEventListener("focus", handler);
+  }, [fetchDimensions]);
+
   return { dimensions, loading, error, refresh: fetchDimensions };
 }

@@ -109,7 +109,9 @@ export default function ThemesPage() {
         <p className="max-w-3xl text-base leading-6 text-[#4d5c6e]">
           Select a theme to review its topics and update assessment ratings. The descriptive copy is sourced from the enhanced resilience framework.
         </p>
-        <span className="text-sm text-[#61758a]">{themes.length} themes</span>
+        <span className="text-sm text-[#61758a]">
+          {loading ? "–" : themes.length} themes
+        </span>
       </header>
       {loading && <div className="text-sm text-[#61758a]">Loading themes…</div>}
       {error && <div className="text-sm text-red-600">{error}</div>}

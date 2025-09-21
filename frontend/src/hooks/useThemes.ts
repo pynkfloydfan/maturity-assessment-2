@@ -28,5 +28,14 @@ export function useThemes(dimensionId: number | null) {
     fetchThemes();
   }, [fetchThemes]);
 
+  useEffect(() => {
+    if (!dimensionId) {
+      return;
+    }
+    const handler = () => fetchThemes();
+    window.addEventListener("focus", handler);
+    return () => window.removeEventListener("focus", handler);
+  }, [fetchThemes, dimensionId]);
+
   return { themes, loading, error, refresh: fetchThemes };
 }

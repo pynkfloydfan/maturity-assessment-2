@@ -60,7 +60,8 @@ function DimensionTile({
   );
 }
 
-function PageHeader({ dimensionCount }: { dimensionCount: number }) {
+function PageHeader({ dimensionCount, loading }: { dimensionCount: number; loading: boolean }) {
+  const countLabel = loading ? "–" : String(dimensionCount);
   return (
     <header className="mb-8">
       <div className="flex flex-col gap-2">
@@ -68,7 +69,7 @@ function PageHeader({ dimensionCount }: { dimensionCount: number }) {
         <p className="max-w-3xl text-base leading-6 text-[#4d5c6e]">
           Dimensions are the pillars of the resilience framework. Select a dimension to drill into its themes and capture topic-level assessments using the guidance sourced from the latest operational resilience blueprint.
         </p>
-        <span className="text-sm text-[#61758a]">{dimensionCount} dimensions available</span>
+        <span className="text-sm text-[#61758a]">{countLabel} dimensions available</span>
       </div>
     </header>
   );
@@ -80,7 +81,7 @@ export default function DimensionsPage() {
   return (
     <div className="mx-auto flex max-w-6xl flex-col gap-6 px-6 py-10">
       <Breadcrumb items={[{ label: "Dimensions" }]} />
-      <PageHeader dimensionCount={dimensions.length} />
+      <PageHeader dimensionCount={dimensions.length} loading={loading} />
       {loading && <div className="text-sm text-[#61758a]">Loading dimensions…</div>}
       {error && <div className="text-sm text-red-600">{error}</div>}
       {!loading && !error && dimensions.length === 0 && (

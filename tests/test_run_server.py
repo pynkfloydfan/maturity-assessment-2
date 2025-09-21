@@ -34,4 +34,3 @@ def test_ensure_frontend_build_triggers_npm(tmp_frontend: Path, monkeypatch: pyt
     assert calls[0][0] == ["npm", "install"]
     assert Path(calls[0][1]) == tmp_frontend
     assert calls[1][0] == ["npm", "run", "build"]
-*** End Patch
