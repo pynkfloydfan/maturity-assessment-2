@@ -170,12 +170,23 @@ new descriptive fields.
 
 Perform these steps whenever you want a quick end-to-end verification:
 
-1. `poetry run python scripts/run_server.py`
+1. `poetry run server`
 2. Open <http://127.0.0.1:8000>
 3. Navigate to **Settings** → seed the database (if empty) and create/select a session.
 4. Visit **Dimensions**/**Themes**/**Topics** to capture ratings and comments.
 5. Confirm the **Dashboard** renders tiles, the Plotly radar, and download links
    for JSON/XLSX exports.
+
+### Customising imagery
+
+- Dimension card images live in `app/web/static/images/dimensions/`. Replace the
+  existing `.png` files (e.g. `governance-leadership.png`) with your own artwork
+  and rerun `npm run build` (or `poetry run server`, which triggers a build if
+  required).
+- Theme cards look for assets in
+  `app/web/static/images/themes/<dimension>/<theme>.png` (slugified names). If no
+  theme-specific file is present, the UI falls back to the parent dimension
+  image.
 
 ## Next steps
 

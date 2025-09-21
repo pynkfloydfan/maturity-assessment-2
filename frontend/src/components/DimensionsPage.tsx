@@ -1,8 +1,25 @@
 import { Link } from "react-router-dom";
 import Breadcrumb from "./shared/Breadcrumb";
-import { ImageWithFallback } from "./figma/ImageWithFallback";
-import { dimensionImageByFilename, dimensionImageByName } from "../assets/dimensionImages";
 import { useDimensions } from "../hooks/useDimensions";
+
+const DIMENSION_SLUGS: Record<string, string> = {
+  "Governance & Leadership": "governance-leadership",
+  "Risk Assessment & Management": "risk-assessment-management",
+  "BC & DR Planning": "bc-dr-planning",
+  "Process & Dependency Mapping": "process-dependency-mapping",
+  "IT & Cyber Resilience": "it-cyber-resilience",
+  "Crisis Comms & Incident Mgmt": "crisis-comms-incident-mgmt",
+  "Third-Party Resilience": "third-party-resilience",
+  "Culture & Human Factors": "culture-human-factors",
+  "Regulatory Compliance & Resolvability": "regulatory-compliance-resolvability",
+};
+
+const DIMENSION_PLACEHOLDER = "/static/images/dimensions/default.png";
+
+function makeDimensionImagePath(name: string): string {
+  const slug = DIMENSION_SLUGS[name] ?? name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+  return `/static/images/dimensions/${slug}.png`;
+}
 
 function DimensionTile({
   id,
@@ -13,21 +30,25 @@ function DimensionTile({
   id: number;
   title: string;
   description?: string | null;
-  imageSrc?: string | null;
+  imageSrc: string;
 }) {
-  const placeholder = "https://images.unsplash.com/photo-1521737604893-d14cc237f11d?auto=format&fit=crop&w=640&q=80";
 
   return (
     <Link
       to={`/dimensions/${id}/themes`}
       className="flex w-56 flex-col gap-3 rounded-xl border border-[#e5e8eb] bg-white p-3 text-inherit no-underline shadow-sm transition hover:-translate-y-1 hover:shadow-md"
     >
-      <div className="h-40 w-full overflow-hidden rounded-lg">
-        <ImageWithFallback
-            src={imageSrc ?? placeholder}
-            alt={title}
-            className="h-full w-full object-cover"
-          />
+      <div className="h-40 w-full overflow-hidden rounded-lg bg-[#f5f7fb]">
+        <img
+          src={imageSrc}
+          alt={title}
+          className="h-full w-full object-cover"
+          onError={(event) => {
+            if (event.currentTarget.src !== DIMENSION_PLACEHOLDER) {
+              event.currentTarget.src = DIMENSION_PLACEHOLDER;
+            }
+          }}
+        />
       </div>
       <div className="flex flex-col gap-1">
         <h3 className="text-base font-semibold text-[#121417]">{title}</h3>
@@ -69,17 +90,14 @@ export default function DimensionsPage() {
       )}
       <div className="flex flex-wrap gap-6">
         {dimensions.map((dimension) => {
-          const imageFromFilename = dimension.image_filename
-            ? dimensionImageByFilename[dimension.image_filename]
-            : undefined;
-          const fallbackImage = dimensionImageByName[dimension.name];
+          const imageSrc = makeDimensionImagePath(dimension.name);
           return (
             <DimensionTile
               key={dimension.id}
               id={dimension.id}
               title={dimension.name}
               description={dimension.description}
-              imageSrc={imageFromFilename ?? fallbackImage}
+              imageSrc={imageSrc}
             />
           );
         })}

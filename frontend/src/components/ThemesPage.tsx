@@ -1,8 +1,30 @@
 import { Link, useParams } from "react-router-dom";
 import Breadcrumb from "./shared/Breadcrumb";
-import { ImageWithFallback } from "./figma/ImageWithFallback";
 import { useDimensions } from "../hooks/useDimensions";
 import { useThemes } from "../hooks/useThemes";
+
+const DIMENSION_SLUGS: Record<string, string> = {
+  "Governance & Leadership": "governance-leadership",
+  "Risk Assessment & Management": "risk-assessment-management",
+  "BC & DR Planning": "bc-dr-planning",
+  "Process & Dependency Mapping": "process-dependency-mapping",
+  "IT & Cyber Resilience": "it-cyber-resilience",
+  "Crisis Comms & Incident Mgmt": "crisis-comms-incident-mgmt",
+  "Third-Party Resilience": "third-party-resilience",
+  "Culture & Human Factors": "culture-human-factors",
+  "Regulatory Compliance & Resolvability": "regulatory-compliance-resolvability",
+};
+
+const DIMENSION_PLACEHOLDER = "/static/images/dimensions/default.png";
+
+function slugify(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/&/g, "and")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
 
 function ThemeTile({
   dimensionId,
@@ -10,21 +32,35 @@ function ThemeTile({
   title,
   description,
   category,
+  imageSrc,
+  fallbackImage,
 }: {
   dimensionId: number;
   themeId: number;
   title: string;
   description?: string | null;
   category?: string | null;
+  imageSrc: string;
+  fallbackImage: string;
 }) {
-  const placeholder = "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=640&q=80";
   return (
     <Link
       to={`/dimensions/${dimensionId}/themes/${themeId}/topics`}
       className="flex w-56 flex-col gap-3 rounded-xl border border-[#e5e8eb] bg-white p-3 text-inherit no-underline shadow-sm transition hover:-translate-y-1 hover:shadow-md"
     >
       <div className="h-36 w-full overflow-hidden rounded-lg bg-[#f3f5f9]">
-        <ImageWithFallback src={placeholder} alt={title} className="h-full w-full object-cover" />
+        <img
+          src={imageSrc}
+          alt={title}
+          className="h-full w-full object-cover"
+          onError={(event) => {
+            if (event.currentTarget.src !== fallbackImage) {
+              event.currentTarget.src = fallbackImage;
+            } else if (fallbackImage !== DIMENSION_PLACEHOLDER) {
+              event.currentTarget.src = DIMENSION_PLACEHOLDER;
+            }
+          }}
+        />
       </div>
       <div className="flex flex-col gap-1">
         <span className="text-xs uppercase tracking-wide text-[#61758a]">{category ?? "Theme"}</span>
@@ -83,16 +119,25 @@ export default function ThemesPage() {
         </div>
       )}
       <div className="flex flex-wrap gap-6">
-        {themes.map((theme) => (
-          <ThemeTile
-            key={theme.id}
-            dimensionId={dimension.id}
-            themeId={theme.id}
-            title={theme.name}
-            description={theme.description}
-            category={theme.category}
-          />
-        ))}
+        {themes.map((theme) => {
+          const dimensionSlug = DIMENSION_SLUGS[dimension.name] ?? slugify(dimension.name);
+          const themeSlug = slugify(theme.name);
+          const themeImage = `/static/images/themes/${dimensionSlug}/${themeSlug}.png`;
+          const fallbackImage = `/static/images/dimensions/${dimensionSlug}.png`;
+
+          return (
+            <ThemeTile
+              key={theme.id}
+              dimensionId={dimension.id}
+              themeId={theme.id}
+              title={theme.name}
+              description={theme.description}
+              category={theme.category}
+              imageSrc={themeImage}
+              fallbackImage={fallbackImage}
+            />
+          );
+        })}
       </div>
     </div>
   );
