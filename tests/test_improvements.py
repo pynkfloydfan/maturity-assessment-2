@@ -6,6 +6,7 @@ Tests validation, error handling, logging, configuration, and repository pattern
 
 import os
 import tempfile
+from typing import Any, cast
 from unittest.mock import patch
 
 import pytest
@@ -48,8 +49,10 @@ class TestPydanticValidation:
         )
 
         assert result.success is True
-        assert result.data["name"] == "Test Session"
-        assert result.data["assessor"] == "John Doe"
+        assert result.data is not None
+        data = result.data
+        assert data["name"] == "Test Session"
+        assert data["assessor"] == "John Doe"
 
     def test_session_creation_validation_failure(self):
         """Test session creation validation with invalid data."""
@@ -75,8 +78,10 @@ class TestPydanticValidation:
         )
 
         assert result.success is True
-        assert result.data["rating_level"] == 3
-        assert result.data["is_na"] is False
+        assert result.data is not None
+        data = result.data
+        assert data["rating_level"] == 3
+        assert data["is_na"] is False
 
     def test_assessment_entry_validation_na_consistency(self):
         """Test that is_na and rating_level are mutually exclusive."""
@@ -105,9 +110,11 @@ class TestPydanticValidation:
         )
 
         assert result.success is True
-        assert result.data["name"] == "Test Session"
-        assert "&lt;script&gt;" in result.data["assessor"]  # HTML escaped
-        assert "\x00" not in result.data["notes"]  # Control char removed
+        assert result.data is not None
+        data = result.data
+        assert data["name"] == "Test Session"
+        assert "&lt;script&gt;" in data["assessor"]  # HTML escaped
+        assert "\x00" not in data["notes"]  # Control char removed
 
 
 class TestErrorHandling:
@@ -129,7 +136,7 @@ class TestErrorHandling:
         from app.infrastructure.exceptions import handle_database_error
 
         # Simulate a unique constraint violation
-        original_error = SQLIntegrityError("statement", {}, "UNIQUE constraint failed")
+        original_error = SQLIntegrityError("statement", {}, Exception("UNIQUE constraint failed"))
         db_error = handle_database_error(original_error, "test_operation")
 
         assert "IntegrityError" in type(db_error).__name__
@@ -285,8 +292,10 @@ class TestRepositoryPatterns:
         repo = SessionRepo(test_session)
 
         # Test database error handling
-        with patch.object(test_session, "add", side_effect=Exception("DB Error")), \
-            pytest.raises(DatabaseError):
+        with (
+            patch.object(test_session, "add", side_effect=Exception("DB Error")),
+            pytest.raises(DatabaseError),
+        ):
             repo.create(name="Test Session")
 
 
@@ -336,7 +345,7 @@ class TestDomainServices:
             clamp_rating(6)
 
         with pytest.raises(ValidationError):
-            clamp_rating("3")  # String instead of int
+            clamp_rating(cast(Any, "3"))  # String instead of int
 
     @pytest.fixture
     def test_session(self):

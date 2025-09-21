@@ -335,9 +335,9 @@ def create_user_friendly_error_message(error: Exception) -> str:
     # Generic error handling for unexpected exceptions
     error_type = type(error).__name__
     messages = {
-    "ValueError": "Invalid input provided. Please check your data and try again.",
-    "KeyError": "Required information is missing. Please check your input.",
-    "TypeError": "Incorrect data type provided. Please check your input format.",
+        "ValueError": "Invalid input provided. Please check your data and try again.",
+        "KeyError": "Required information is missing. Please check your input.",
+        "TypeError": "Incorrect data type provided. Please check your input format.",
     }
     return messages.get(
         error_type, "An unexpected error occurred. Please try again or contact support."

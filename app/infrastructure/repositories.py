@@ -11,6 +11,8 @@ This module provides data access layer implementations with:
 
 from __future__ import annotations
 
+from typing import NoReturn
+
 from sqlalchemy.exc import IntegrityError as SQLIntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
 
@@ -65,7 +67,7 @@ class BaseRepository:
         self.session = session
         self.logger = get_logger(self.__class__.__name__)
 
-    def _handle_error(self, error: Exception, operation: str) -> None:
+    def _handle_error(self, error: Exception, operation: str) -> NoReturn:
         """
         Convert database errors to application-specific exceptions.
 

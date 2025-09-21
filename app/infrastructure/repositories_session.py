@@ -80,11 +80,15 @@ class SessionRepo(GenericBaseRepository[AssessmentSessionORM]):
         return q.limit(1).one_or_none()
 
     @log_op("session.list_all")
-    def list_all(self) -> builtins.list[AssessmentSessionORM]:
+    def list_all(
+        self, order_by: Iterable[Any] | None = None
+    ) -> builtins.list[AssessmentSessionORM]:
         # Default ordering: newest first by created_at if present, else by id
-        default_order = (
-            [self.model.created_at.desc()]
-            if hasattr(self.model, "created_at")
-            else [self.model.id.desc()]
-        )
-        return super().list(order_by=default_order)
+        if order_by is not None:
+            return super().list(order_by=order_by)
+
+        if hasattr(self.model, "created_at"):
+            order_expr: Any = self.model.created_at.desc()
+        else:
+            order_expr = self.model.id.desc()
+        return super().list(order_by=[order_expr])

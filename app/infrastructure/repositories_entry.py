@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import logging
 from decimal import Decimal
+from typing import NoReturn
 
 from sqlalchemy.exc import IntegrityError as SQLIntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
@@ -41,7 +42,7 @@ class EntryRepo(GenericBaseRepository[AssessmentEntryORM]):
         self._logger = logging.getLogger(__name__)
 
     # ----- internal error helper (back-compat with old BaseRepository) -----
-    def _handle_error(self, exc: Exception, operation: str) -> None:
+    def _handle_error(self, exc: Exception, operation: str) -> NoReturn:
         """
         Mirror the behavior your old BaseRepository provided:
         - Log the exception with operation context
@@ -90,7 +91,11 @@ class EntryRepo(GenericBaseRepository[AssessmentEntryORM]):
 
             # Update fields
             obj.rating_level = validated_data.rating_level
-            obj.computed_score = validated_data.computed_score
+            obj.computed_score = (
+                float(validated_data.computed_score)
+                if validated_data.computed_score is not None
+                else None
+            )
             obj.is_na = validated_data.is_na
             obj.comment = validated_data.comment
 

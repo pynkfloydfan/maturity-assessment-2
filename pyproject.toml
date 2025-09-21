@@ -72,12 +72,17 @@ no_implicit_optional = true
 check_untyped_defs = true
 disallow_incomplete_defs = true
 strict_equality = true
+namespace_packages = true
 # Start gradually: only check key folders first
 files = ["app/application", "app/infrastructure", "app/domain"]
 
 
 [[tool.mypy.overrides]]
 module = ["streamlit.*", "pytest.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["alembic", "alembic.*"]
 ignore_missing_imports = true
 
 [tool.poetry.scripts]

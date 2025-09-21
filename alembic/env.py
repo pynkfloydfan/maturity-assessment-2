@@ -4,7 +4,7 @@ import os
 import sys
 from logging.config import fileConfig
 
-from alembic import context
+from alembic import context  # type: ignore[attr-defined]
 from sqlalchemy import engine_from_config, pool
 
 # Add project path

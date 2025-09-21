@@ -13,7 +13,7 @@ import json
 from dataclasses import asdict, dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, TypedDict
 
 from sqlalchemy import text
 from sqlalchemy.orm import Session
@@ -32,6 +32,14 @@ from ..infrastructure.repositories import (
 )
 
 logger = get_logger(__name__)
+
+
+class BackupVerificationResult(TypedDict):
+    valid: bool
+    errors: list[str]
+    warnings: list[str]
+    metadata: dict[str, Any]
+    statistics: dict[str, Any]
 
 
 @dataclass
@@ -300,13 +308,13 @@ class BackupService:
                             "version": "unknown",
                             "error": str(e),
                         }
-                    ) 
+                    )
 
         # Sort by creation date (newest first)
         backups.sort(key=lambda x: x.get("created_at") or "", reverse=True)
         return backups
 
-    def verify_backup(self, backup_path: str | Path) -> dict[str, Any]:
+    def verify_backup(self, backup_path: str | Path) -> BackupVerificationResult:
         """
         Verify backup file integrity and contents.
 
@@ -323,7 +331,13 @@ class BackupService:
             ...     print("Backup is valid")
         """
         backup_path = Path(backup_path)
-        result = {"valid": False, "errors": [], "warnings": [], "metadata": {}, "statistics": {}}
+        result: BackupVerificationResult = {
+            "valid": False,
+            "errors": [],
+            "warnings": [],
+            "metadata": {},
+            "statistics": {},
+        }
 
         try:
             # Load backup data
@@ -355,7 +369,7 @@ class BackupService:
 
     def _collect_backup_data(self) -> dict[str, Any]:
         """Collect all database data for backup."""
-        data = {}
+        data: dict[str, Any] = {}
 
         try:
             # Collect all dimensions
@@ -462,7 +476,7 @@ class BackupService:
 
         except Exception as e:
             self.logger.error(f"Failed to collect backup data: {str(e)}")
-            raise 
+            raise
 
     def _create_backup_metadata(
         self, backup_data: dict[str, Any], compressed: bool
@@ -493,7 +507,7 @@ class BackupService:
             return data
 
         except json.JSONDecodeError as e:
-            raise ValidationError("backup_format", f"Invalid JSON in backup file: {str(e)}")
+            raise ValidationError("backup_format", f"Invalid JSON in backup file: {str(e)}") from e
         except Exception as e:
             raise DatabaseError(f"Failed to load backup file: {str(e)}", "load_backup") from e
 
@@ -578,10 +592,10 @@ class BackupService:
             session_repo = SessionRepo(self.session)
             for sess_data in backup_data.get("sessions", []):
                 session_repo.create(
-                    sess_data["name"],
-                    sess_data.get("assessor"),
-                    sess_data.get("organization"),
-                    sess_data.get("notes"),
+                    name=sess_data["name"],
+                    assessor=sess_data.get("assessor"),
+                    organization=sess_data.get("organization"),
+                    notes=sess_data.get("notes"),
                 )
                 stats["sessions_restored"] += 1
 
@@ -627,7 +641,7 @@ class BackupService:
 
 
 # Convenience functions
-def create_backup(session: Session, backup_dir: str, **kwargs) -> Path:
+def create_backup(session: Session, backup_dir: str, **kwargs: Any) -> Path:
     """
     Create a database backup (convenience function).
 
@@ -646,7 +660,7 @@ def create_backup(session: Session, backup_dir: str, **kwargs) -> Path:
     return service.create_backup(backup_dir, **kwargs)
 
 
-def restore_backup(session: Session, backup_path: str, **kwargs) -> dict[str, Any]:
+def restore_backup(session: Session, backup_path: str, **kwargs: Any) -> dict[str, Any]:
     """
     Restore database from backup (convenience function).
 

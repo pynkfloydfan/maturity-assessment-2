@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Iterable
+from typing import Any, NoReturn
 
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
@@ -37,7 +39,7 @@ class RatingScaleRepo(GenericBaseRepository[RatingScaleORM]):
         self._logger = logging.getLogger(__name__)
 
     # ----- internal error helper (back-compat with old BaseRepository) -----
-    def _handle_error(self, exc: Exception, operation: str) -> None:
+    def _handle_error(self, exc: Exception, operation: str) -> NoReturn:
         """
         Mirror the behavior your old BaseRepository provided:
         - Log the exception with operation context
@@ -73,10 +75,13 @@ class RatingScaleRepo(GenericBaseRepository[RatingScaleORM]):
             self._handle_error(e, "upsert_rating_scale")
 
     @log_op("list_rating_scales")
-    def list_all(self) -> list[RatingScaleORM]:
+    def list_all(self, order_by: Iterable[Any] | None = None) -> list[RatingScaleORM]:
         """
         Get all rating scale entries ordered by level.
         """
+        if order_by is not None:
+            return super().list(order_by=order_by)
+
         try:
             return self.session.query(RatingScaleORM).order_by(RatingScaleORM.level).all()
         except SQLAlchemyError as e:

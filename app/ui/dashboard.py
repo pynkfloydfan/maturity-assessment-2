@@ -4,6 +4,7 @@ import math
 
 import pandas as pd
 import streamlit as st
+from sqlalchemy.orm import Session, sessionmaker
 
 from app.application.api import (
     compute_dimension_averages,
@@ -18,13 +19,13 @@ from app.utils.exports import make_json_export_payload, make_xlsx_export_bytes
 from app.utils.resilience_radar import gradient_color, make_resilience_radar_with_theme_bars
 
 
-def build_dashboard(SessionLocal) -> None:
+def build_dashboard(session_factory: sessionmaker[Session]) -> None:
     session_id = st.session_state.get(SESSION_ID)
     if not session_id:
         st.info("Create/select a session on the 'Rate topics' tab to see results.")
         return
 
-    with SessionLocal() as s:
+    with session_factory() as s:
         dim_avgs = compute_dimension_averages(s, session_id=session_id)
         compute_theme_averages(s, session_id=session_id)
 
@@ -108,11 +109,11 @@ def build_dashboard(SessionLocal) -> None:
         entries = s.query(AssessmentEntryORM).filter_by(session_id=session_id, is_na=False).all()
         ratings_map = {}
         for e in entries:
-            val = (
-                float(e.computed_score)
-                if getattr(e, "computed_score", None) is not None
-                else e.rating_level
-            )
+            computed = getattr(e, "computed_score", None)
+            if computed is not None:
+                val: float | int | None = float(computed)
+            else:
+                val = e.rating_level
             if val is not None:
                 ratings_map[e.topic_id] = float(val)
 

@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Iterable
+from typing import Any, NoReturn
 
 from sqlalchemy.exc import IntegrityError as SQLIntegrityError, SQLAlchemyError
 from sqlalchemy.orm import (
@@ -42,7 +44,7 @@ class TopicRepo(GenericBaseRepository[TopicORM]):
         self._logger = logging.getLogger(__name__)
 
     # ----- internal error helper (back-compat with old BaseRepository) -----
-    def _handle_error(self, exc: Exception, operation: str) -> None:
+    def _handle_error(self, exc: Exception, operation: str) -> NoReturn:
         """
         Mirror the behavior your old BaseRepository provided:
         - Log the exception with operation context
@@ -97,10 +99,20 @@ class TopicRepo(GenericBaseRepository[TopicORM]):
         return topic
 
     @log_op("create_topic")
-    def create(self, theme_id: int, name: str) -> TopicORM:
+    def create(
+        self,
+        theme_id: int | None = None,
+        name: str | None = None,
+        **_: Any,
+    ) -> TopicORM:
         """
         Create new topic.
         """
+        if theme_id is None:
+            raise ValidationError("theme_id", "Theme ID must be provided")
+        if name is None:
+            raise ValidationError("name", "Topic name cannot be empty")
+
         # Validate input
         validated_data = TopicInput(theme_id=theme_id, name=name)
 
@@ -136,10 +148,13 @@ class TopicRepo(GenericBaseRepository[TopicORM]):
             self._handle_error(e, "list_topics_by_theme")
 
     @log_op("list_all_topics")
-    def list_all(self) -> list[TopicORM]:
+    def list_all(self, order_by: Iterable[Any] | None = None) -> list[TopicORM]:
         """
         Get all topics across all themes.
         """
+        if order_by is not None:
+            return super().list(order_by=order_by)
+
         try:
             return (
                 self.session.query(TopicORM)
