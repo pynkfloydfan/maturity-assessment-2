@@ -446,7 +446,7 @@ def load_settings_from_file(file_path: str) -> Settings:
     return get_settings()
 
 
-def override_settings(**kwargs) -> Settings:
+def override_settings(**kwargs: Any) -> Settings:
     """
     Override specific settings for testing or development.
 

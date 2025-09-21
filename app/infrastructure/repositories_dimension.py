@@ -3,6 +3,8 @@ from __future__ import annotations
 
 import builtins
 import logging
+from collections.abc import Iterable
+from typing import Any, NoReturn
 
 from sqlalchemy.exc import IntegrityError as SQLIntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session, joinedload
@@ -48,7 +50,7 @@ class DimensionRepo(GenericBaseRepository[DimensionORM]):
         self._logger = logging.getLogger(__name__)
 
     # ----- internal error helper (back-compat with old BaseRepository) -----
-    def _handle_error(self, exc: Exception, operation: str) -> None:
+    def _handle_error(self, exc: Exception, operation: str) -> NoReturn:
         """
         Mirror the behavior your old BaseRepository provided:
         - Log the exception with operation context
@@ -104,7 +106,7 @@ class DimensionRepo(GenericBaseRepository[DimensionORM]):
             self._handle_error(e, "get_dimension_by_id")
 
     @log_op("create_dimension")
-    def create(self, name: str) -> DimensionORM:
+    def create(self, name: str | None = None, **_: Any) -> DimensionORM:
         """
         Create new dimension.
 
@@ -118,6 +120,9 @@ class DimensionRepo(GenericBaseRepository[DimensionORM]):
             ValidationError: If input is invalid
             IntegrityError: If dimension name already exists
         """
+        if name is None:
+            raise ValidationError("name", "Dimension name cannot be empty")
+
         validated_data = DimensionInput(name=name)
 
         try:
@@ -131,10 +136,19 @@ class DimensionRepo(GenericBaseRepository[DimensionORM]):
             self._handle_error(e, "create_dimension")
 
     @log_op("list_dimensions")
-    def list(self) -> builtins.list[DimensionORM]:
+    def list(
+        self,
+        *filters: Any,
+        order_by: Iterable[Any] | None = None,
+        limit: int | None = None,
+        offset: int | None = None,
+    ) -> builtins.list[DimensionORM]:
         """
         Get all dimensions ordered by name.
         """
+        if filters or order_by is not None or limit is not None or offset is not None:
+            return super().list(*filters, order_by=order_by, limit=limit, offset=offset)
+
         try:
             return self.session.query(DimensionORM).order_by(DimensionORM.name).all()
         except SQLAlchemyError as e:

@@ -1,6 +1,7 @@
 # app/infrastructure/repositories_base.py
 from __future__ import annotations
 
+import builtins
 from collections.abc import Iterable
 from typing import Any, TypeVar
 
@@ -39,7 +40,7 @@ class BaseRepository[T]:
         order_by: Iterable[Any] | None = None,
         limit: int | None = None,
         offset: int | None = None,
-    ) -> list[T]:
+    ) -> builtins.list[T]:
         q = self.s.query(self.model)
         for f in filters:
             q = q.filter(f)
@@ -55,7 +56,7 @@ class BaseRepository[T]:
     def list_all(
         self,
         order_by: Iterable[Any] | None = None,
-    ) -> list[T]:
+    ) -> builtins.list[T]:
         """Backward-compatible alias for code that expects `list_all()`."""
         return self.list(order_by=order_by)
 
@@ -63,7 +64,8 @@ class BaseRepository[T]:
         q = self.s.query(self.model)
         for f in filters:
             q = q.filter(f)
-        return self.s.query(q.exists()).scalar()  # type: ignore[no-any-return]
+        result = self.s.query(q.exists()).scalar()
+        return bool(result)
 
     def count(self, *filters: Any) -> int:
         q = self.s.query(self.model)
@@ -73,7 +75,7 @@ class BaseRepository[T]:
 
     # ---------- Write ----------
     def create(self, **fields: Any) -> T:
-        obj = self.model(**fields)  # type: ignore[call-arg]
+        obj = self.model(**fields)
         self.s.add(obj)
         self.s.flush()  # get PKs without committing
         return obj

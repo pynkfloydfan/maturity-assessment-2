@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
 import streamlit as st
+from sqlalchemy.engine import Engine
 from sqlalchemy.exc import OperationalError
+from sqlalchemy.orm import Session, sessionmaker
 
 from app.infrastructure.config import DatabaseConfig
 from app.infrastructure.db import make_engine_and_session
@@ -13,10 +16,10 @@ from app.ui.state_keys import DB_URL, SESSION_ID
 from app.utils.seed import initialise_database, seed_database_from_excel
 
 
-def fetch_sessions(SessionLocal) -> tuple[list[dict], bool]:
+def fetch_sessions(session_factory: sessionmaker[Session]) -> tuple[list[dict[str, Any]], bool]:
     """Return (sessions_as_primitives, db_uninitialized)."""
     try:
-        with UnitOfWork(SessionLocal).begin() as s:
+        with UnitOfWork(session_factory).begin() as s:
             raw = SessionRepo(s).list_all()
             sessions = [{"id": sess.id, "name": sess.name} for sess in raw]
         return sessions, False
@@ -26,7 +29,9 @@ def fetch_sessions(SessionLocal) -> tuple[list[dict], bool]:
         raise
 
 
-def build_sidebar(default_cfg: DatabaseConfig):
+def build_sidebar(
+    default_cfg: DatabaseConfig,
+) -> tuple[DatabaseConfig, Engine, sessionmaker[Session]]:
     # ── ① Database & Dataset
     with st.sidebar.expander("① Database & Dataset", expanded=True):
         backend_choice = st.radio(
@@ -148,7 +153,8 @@ def build_sidebar(default_cfg: DatabaseConfig):
                                 )
                                 st.session_state[SESSION_ID] = master.id
                                 st.success(
-                                    f"Created master session #{master.id}: {master.name} (now active)"
+                                    f"Created master session #{master.id}: "
+                                    f"{master.name} (now active)"
                                 )
                 else:
                     st.info("No sessions available to combine.")

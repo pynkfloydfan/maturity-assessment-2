@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import streamlit as st
+from sqlalchemy.orm import Session, sessionmaker
 
 from app.application.api import record_topic_rating as record_rating
 from app.infrastructure.models import AssessmentEntryORM, RatingScaleORM
@@ -11,7 +12,7 @@ from app.ui.state_keys import DB_URL, FOCUSED_TOPIC_ID, SESSION_ID
 RATING_OPTIONS = ["N/A", 1, 2, 3, 4, 5]
 
 
-def build_rate_topics(SessionLocal) -> None:
+def build_rate_topics(session_factory: sessionmaker[Session]) -> None:
     """Rate topics page: sticky toolbar selectors + card stack + single guidance drawer."""
     session_id = st.session_state.get(SESSION_ID)
     if not session_id:
@@ -19,7 +20,7 @@ def build_rate_topics(SessionLocal) -> None:
         return
 
     db_url = st.session_state.get(DB_URL, "")
-    df_all = cached_topics_df(SessionLocal, db_url)
+    df_all = cached_topics_df(session_factory, db_url)
 
     # Sticky mini-toolbar: Dimension + Theme + crumb/pill
     st.markdown('<div class="mini-toolbar">', unsafe_allow_html=True)
@@ -69,7 +70,7 @@ def build_rate_topics(SessionLocal) -> None:
         return
 
     # Prefetch entries + rating labels
-    with SessionLocal() as s:
+    with session_factory() as s:
         entries = (
             s.query(AssessmentEntryORM)
             .filter(
@@ -81,7 +82,7 @@ def build_rate_topics(SessionLocal) -> None:
         current_by_tid = {e.topic_id: e for e in entries}
         {r.level: r.label for r in s.query(RatingScaleORM).order_by(RatingScaleORM.level)}
 
-    guidance_index = cached_explanations_for(SessionLocal, db_url, tuple(topic_ids_in_view))
+    guidance_index = cached_explanations_for(session_factory, db_url, tuple(topic_ids_in_view))
 
     # Progress (N/A does not count)
     def current_ui_or_db_rating(tid: int) -> int | None:
@@ -150,8 +151,8 @@ def build_rate_topics(SessionLocal) -> None:
 
         # Save-all button writes only UI-touched topics/comments; others remain unchanged
         if st.button("💾 Save assessment (all topics)", key="save_assessment_all"):
-            with SessionLocal() as s2:
-                df_all_topics = cached_topics_df(SessionLocal, db_url)
+            with session_factory() as s2:
+                df_all_topics = cached_topics_df(session_factory, db_url)
                 for _, rr in df_all_topics.iterrows():
                     ttid = int(rr["TopicID"])
                     rating_key = f"rating_{ttid}"
@@ -202,12 +203,9 @@ def build_rate_topics(SessionLocal) -> None:
                 continue
             from app.infrastructure.models import RatingScaleORM as _RatingScaleORM
 
-            with SessionLocal() as s3:
-                label = (
-                    s3.query(_RatingScaleORM).get(lvl).label
-                    if s3.query(_RatingScaleORM).get(lvl)
-                    else str(lvl)
-                )
+            with session_factory() as s3:
+                rating = s3.get(_RatingScaleORM, lvl)
+                label = rating.label if rating else str(lvl)
             css_class = "level-title is-current" if current_val == lvl else "level-title"
             st.markdown(f'<h3 class="{css_class}">{lvl} — {label}</h3>', unsafe_allow_html=True)
             for b in bullets[:10]:

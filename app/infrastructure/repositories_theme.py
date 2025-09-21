@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import logging
+from typing import Any, NoReturn
 
 from sqlalchemy.exc import IntegrityError as SQLIntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session, joinedload
@@ -40,7 +41,7 @@ class ThemeRepo(GenericBaseRepository[ThemeORM]):
         self._logger = logging.getLogger(__name__)
 
     # ----- internal error helper (back-compat with old BaseRepository) -----
-    def _handle_error(self, exc: Exception, operation: str) -> None:
+    def _handle_error(self, exc: Exception, operation: str) -> NoReturn:
         """
         Mirror the behavior your old BaseRepository provided:
         - Log the exception with operation context
@@ -86,10 +87,20 @@ class ThemeRepo(GenericBaseRepository[ThemeORM]):
             self._handle_error(e, "get_theme_by_id")
 
     @log_op("create_theme")
-    def create(self, dimension_id: int, name: str) -> ThemeORM:
+    def create(
+        self,
+        dimension_id: int | None = None,
+        name: str | None = None,
+        **_: Any,
+    ) -> ThemeORM:
         """
         Create new theme.
         """
+        if dimension_id is None:
+            raise ValidationError("dimension_id", "Dimension ID must be provided")
+        if name is None:
+            raise ValidationError("name", "Theme name cannot be empty")
+
         # Validate input
         validated_data = ThemeInput(dimension_id=dimension_id, name=name)
 

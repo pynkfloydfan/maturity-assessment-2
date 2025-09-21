@@ -6,7 +6,11 @@ import plotly.graph_objects as go
 # --- Color interpolation helpers (kept module-level for reuse) ---
 def hex_to_rgb(h: str) -> tuple[int, int, int]:
     h = h.lstrip("#")
-    return tuple(int(h[i : i + 2], 16) for i in (0, 2, 4))
+    return (
+        int(h[0:2], 16),
+        int(h[2:4], 16),
+        int(h[4:6], 16),
+    )
 
 
 def rgb_to_hex(rgb: tuple[int, int, int]) -> str:

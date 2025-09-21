@@ -7,7 +7,7 @@ Create Date: 2025-08-17 00:30:00.000000
 """
 
 import sqlalchemy as sa
-from alembic import op
+from alembic import op  # type: ignore[attr-defined]
 
 # revision identifiers, used by Alembic.
 revision = "0002_computed_score"

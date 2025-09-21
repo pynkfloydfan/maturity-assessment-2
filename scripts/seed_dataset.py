@@ -6,7 +6,8 @@ from pathlib import Path
 import pandas as pd
 from sqlalchemy.orm import Session
 
-from app.infrastructure.db import DBConfig, build_connection_url, make_engine_and_session
+from app.infrastructure.config import DatabaseConfig
+from app.infrastructure.db import make_engine_and_session
 from app.infrastructure.models import (
     Base,
     DimensionORM,
@@ -40,7 +41,7 @@ def split_bullets(cell: str) -> list[str]:
     return cleaned
 
 
-def seed_from_excel(s: Session, excel_path: Path):
+def seed_from_excel(s: Session, excel_path: Path) -> None:
     df = pd.read_excel(excel_path, sheet_name="Enhanced Framework")
     # enforce required columns
     required = {"Dimension", "Theme", "Topic"}
@@ -122,16 +123,16 @@ def main():
     )
     args = parser.parse_args()
 
-    cfg = DBConfig(
+    cfg = DatabaseConfig(
         backend=args.backend,
         sqlite_path=args.sqlite_path,
         mysql_host=args.mysql_host,
         mysql_port=args.mysql_port,
         mysql_user=args.mysql_user,
         mysql_password=args.mysql_password,
-        mysql_db=args.mysql_db,
+        mysql_database=args.mysql_db,
     )
-    url = build_connection_url(cfg)
+    url = cfg.get_connection_url()
     engine, SessionLocal = make_engine_and_session(url)
     # Create tables if not existing (alembic recommended for production)
 

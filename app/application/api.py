@@ -137,14 +137,18 @@ def create_assessment_session(
         logger.warning(f"Session creation validation failed: {error_msg}")
         raise ValidationError("session_data", error_msg)
 
+    validated_data = validation_result.data
+    if validated_data is None:
+        raise RuntimeError("Validation succeeded but returned no data")
+
     try:
         set_context(operation="create_session", session_name=name)
         repo = SessionRepo(session)
         session_obj = repo.create(
-            name=validation_result.data["name"],
-            assessor=validation_result.data["assessor"],
-            organization=validation_result.data["organization"],
-            notes=validation_result.data["notes"],
+            name=validated_data["name"],
+            assessor=validated_data["assessor"],
+            organization=validated_data["organization"],
+            notes=validated_data["notes"],
         )
 
         logger.info(f"Created assessment session '{name}' with ID {session_obj.id}")
@@ -329,7 +333,7 @@ def compute_theme_averages(session: Session, session_id: int) -> list[AverageRes
             f"Failed to calculate theme averages for session {session_id}: {str(e)}",
             details=error_details,
             user_message="Unable to calculate theme scores. Please try again.",
-        )from e
+        ) from e
 
 
 @log_operation("compute_dimension_averages")
@@ -594,7 +598,10 @@ def combine_sessions_to_master(
                     rating_level=None,
                     computed_score=Decimal(str(round(average_score, 2))),
                     is_na=False,
-                    comment=f"Combined from {len(values)} ratings across {len(source_session_ids)} sessions",
+                    comment=(
+                        f"Combined from {len(values)} ratings across "
+                        f"{len(source_session_ids)} sessions"
+                    ),
                 )
                 entries_created += 1
             else:

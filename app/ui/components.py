@@ -37,7 +37,7 @@ def scorecard(value_str: str, subtitle: str, *, bg_hex: str | None = None) -> No
 
 
 def guidance_preview_for(
-    tid: int, level_or_na, guidance_index: dict[int, dict[int, list[str]]]
+    tid: int, level_or_na: int | str, guidance_index: dict[int, dict[int, list[str]]]
 ) -> str:
     """Return a short single-line hint for current level (first bullet)."""
     if isinstance(level_or_na, int):
@@ -50,7 +50,7 @@ def topic_card(
     *,
     topic_id: int,
     topic_title: str,
-    default_value,  # "N/A" or int
+    default_value: int | str,  # "N/A" or int
     default_comment: str,
     guidance_index: dict[int, dict[int, list[str]]],
     rating_key: str,

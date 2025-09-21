@@ -5,12 +5,21 @@ Provides structured logging with appropriate levels, formatting, and
 context tracking for debugging and monitoring.
 """
 
+from __future__ import annotations
+
 import json
 import logging
 import logging.config
 import os
+from collections.abc import Callable
 from datetime import datetime
+from functools import wraps
 from pathlib import Path
+from types import TracebackType
+from typing import Any, ParamSpec, TypeVar, cast
+
+P = ParamSpec("P")
+R = TypeVar("R")
 
 
 class StructuredFormatter(logging.Formatter):
@@ -43,11 +52,13 @@ class StructuredFormatter(logging.Formatter):
 
         # Include exception information if present
         if record.exc_info:
-            log_entry["exception"] = {
-                "type": record.exc_info[0].__name__,
-                "message": str(record.exc_info[1]),
-                "traceback": self.formatException(record.exc_info),
-            }
+            exc_type, exc_value, exc_tb = record.exc_info
+            if exc_type is not None and exc_value is not None:
+                log_entry["exception"] = {
+                    "type": exc_type.__name__,
+                    "message": str(exc_value),
+                    "traceback": self.formatException((exc_type, exc_value, exc_tb)),
+                }
 
         return json.dumps(log_entry, ensure_ascii=False)
 
@@ -57,13 +68,13 @@ class ContextFilter(logging.Filter):
 
     def __init__(self):
         super().__init__()
-        self.context = {}
+        self.context: dict[str, Any] = {}
 
-    def set_context(self, **kwargs):
+    def set_context(self, **kwargs: Any) -> None:
         """Set context variables for logging."""
         self.context.update(kwargs)
 
-    def clear_context(self):
+    def clear_context(self) -> None:
         """Clear all context variables."""
         self.context.clear()
 
@@ -102,7 +113,7 @@ def setup_logging(
         log_path.parent.mkdir(parents=True, exist_ok=True)
 
     # Configure logging
-    config = {
+    config: dict[str, Any] = {
         "version": 1,
         "disable_existing_loggers": False,
         "formatters": {
@@ -132,22 +143,25 @@ def setup_logging(
         "root": {"level": level, "handlers": []},
     }
 
-    handlers = []
+    handler_configs = cast(dict[str, dict[str, Any]], config["handlers"])
+    logger_configs = cast(dict[str, dict[str, Any]], config["loggers"])
+    root_config = cast(dict[str, Any], config["root"])
+    handler_names: list[str] = []
 
     # Console handler
     if enable_console:
-        config["handlers"]["console"] = {
+        handler_configs["console"] = {
             "class": "logging.StreamHandler",
             "level": level,
             "formatter": "structured" if structured else "standard",
             "filters": ["context"],
             "stream": "ext://sys.stdout",
         }
-        handlers.append("console")
+        handler_names.append("console")
 
     # File handler
     if log_file:
-        config["handlers"]["file"] = {
+        handler_configs["file"] = {
             "class": "logging.handlers.RotatingFileHandler",
             "level": level,
             "formatter": "structured",
@@ -157,14 +171,12 @@ def setup_logging(
             "backupCount": 5,
             "encoding": "utf-8",
         }
-        handlers.append("file")
+        handler_names.append("file")
 
     # Apply handlers to all loggers
-    for logger_name in ["app", "sqlalchemy.engine", "streamlit", "root"]:
-        if logger_name in config["loggers"]:
-            config["loggers"][logger_name]["handlers"] = handlers
-        else:
-            config[logger_name]["handlers"] = handlers
+    for logger_config in logger_configs.values():
+        logger_config["handlers"] = list(handler_names)
+    root_config["handlers"] = list(handler_names)
 
     logging.config.dictConfig(config)
 
@@ -187,7 +199,7 @@ def get_logger(name: str) -> logging.Logger:
     return logging.getLogger(full)
 
 
-def set_context(**kwargs) -> None:
+def set_context(**kwargs: Any) -> None:
     """
     Set logging context variables.
 
@@ -208,23 +220,30 @@ def clear_context() -> None:
 class LogContext:
     """Context manager for temporary logging context."""
 
-    def __init__(self, **kwargs):
-        self.context = kwargs
-        self.previous_context = {}
+    def __init__(self, **kwargs: Any):
+        self.context: dict[str, Any] = kwargs
+        self.previous_context: dict[str, Any] = {}
 
-    def __enter__(self):
+    def __enter__(self) -> LogContext:
         # Save current context
         self.previous_context = context_filter.context.copy()
         # Set new context
         context_filter.set_context(**self.context)
         return self
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: TracebackType | None,
+    ) -> None:
         # Restore previous context
         context_filter.context = self.previous_context
 
 
-def log_operation(operation: str, logger: logging.Logger | None = None):
+def log_operation(
+    operation: str, logger: logging.Logger | None = None
+) -> Callable[[Callable[P, R]], Callable[P, R]]:
     """
     Decorator for logging function operations.
 
@@ -238,8 +257,9 @@ def log_operation(operation: str, logger: logging.Logger | None = None):
         ...     pass
     """
 
-    def decorator(func):
-        def wrapper(*args, **kwargs):
+    def decorator(func: Callable[P, R]) -> Callable[P, R]:
+        @wraps(func)
+        def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
             func_logger = logger or get_logger(func.__module__)
 
             with LogContext(operation=operation):
@@ -257,7 +277,7 @@ def log_operation(operation: str, logger: logging.Logger | None = None):
     return decorator
 
 
-def log_database_operation(operation: str):
+def log_database_operation(operation: str) -> Callable[[Callable[P, R]], Callable[P, R]]:
     """
     Decorator for logging database operations with additional context.
 
@@ -270,8 +290,9 @@ def log_database_operation(operation: str):
         ...     pass
     """
 
-    def decorator(func):
-        def wrapper(*args, **kwargs):
+    def decorator(func: Callable[P, R]) -> Callable[P, R]:
+        @wraps(func)
+        def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
             logger = get_logger("database")
 
             with LogContext(operation=f"db_{operation}"):

@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from sqlalchemy import create_engine
 from sqlalchemy.engine import Engine
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import Session, sessionmaker
 
 from .config import DatabaseConfig, get_settings
 from .logging import get_logger
@@ -17,7 +17,7 @@ from .logging import get_logger
 logger = get_logger(__name__)
 
 
-def create_database_engine(config: DatabaseConfig = None) -> Engine:
+def create_database_engine(config: DatabaseConfig | None = None) -> Engine:
     """
     Create SQLAlchemy engine with proper configuration.
 
@@ -49,7 +49,7 @@ def create_database_engine(config: DatabaseConfig = None) -> Engine:
         raise
 
 
-def create_session_factory(engine: Engine = None) -> sessionmaker:
+def create_session_factory(engine: Engine | None = None) -> sessionmaker[Session]:
     """
     Create SQLAlchemy session factory.
 
@@ -70,7 +70,7 @@ def create_session_factory(engine: Engine = None) -> sessionmaker:
 
     logger.info("Creating session factory")
 
-    SessionLocal = sessionmaker(
+    SessionLocal: sessionmaker[Session] = sessionmaker(
         bind=engine, autoflush=False, autocommit=False, expire_on_commit=False, future=True
     )
 
@@ -78,7 +78,9 @@ def create_session_factory(engine: Engine = None) -> sessionmaker:
     return SessionLocal
 
 
-def make_engine_and_session(connection_url: str = None) -> tuple[Engine, sessionmaker]:
+def make_engine_and_session(
+    connection_url: str | None = None,
+) -> tuple[Engine, sessionmaker[Session]]:
     """
     Create engine and session factory (backward compatibility).
 
@@ -98,7 +100,7 @@ def make_engine_and_session(connection_url: str = None) -> tuple[Engine, session
         # Legacy mode: create engine from URL
         logger.info("Using legacy connection URL mode")
         engine = create_engine(connection_url, echo=False, future=True, pool_pre_ping=True)
-        SessionLocal = sessionmaker(
+        SessionLocal: sessionmaker[Session] = sessionmaker(
             bind=engine, autoflush=False, autocommit=False, expire_on_commit=False, future=True
         )
     else:
