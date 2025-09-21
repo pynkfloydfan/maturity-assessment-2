@@ -266,6 +266,10 @@ class ApplicationConfig(BaseSettings):
     """
 
     # Environment
+    title: str = Field(
+        "Operational Resilience Maturity Assessment",
+        description="Application display title",
+    )
     environment: Literal["development", "testing", "production"] = Field(
         "development", description="Application environment"
     )

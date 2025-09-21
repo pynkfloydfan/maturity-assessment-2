@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 from datetime import datetime
 
@@ -24,6 +24,9 @@ class DimensionORM(Base):
     __tablename__ = "dimensions"
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     name: Mapped[str] = mapped_column(String(255), unique=True, nullable=False, index=False)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    image_filename: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    image_alt: Mapped[str | None] = mapped_column(String(255), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=False), default=datetime.utcnow, nullable=False
     )
@@ -38,6 +41,8 @@ class ThemeORM(Base):
         ForeignKey("dimensions.id", ondelete="CASCADE"), nullable=False, index=True
     )
     name: Mapped[str] = mapped_column(String(255), nullable=False)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    category: Mapped[str | None] = mapped_column(String(255), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=False), default=datetime.utcnow, nullable=False
     )
@@ -46,6 +51,9 @@ class ThemeORM(Base):
 
     dimension: Mapped[DimensionORM] = relationship(back_populates="themes")
     topics: Mapped[list[TopicORM]] = relationship(back_populates="theme", cascade="all, delete")
+    level_guidance: Mapped[list[ThemeLevelGuidanceORM]] = relationship(
+        back_populates="theme", cascade="all, delete"
+    )
 
 
 class TopicORM(Base):
@@ -55,6 +63,7 @@ class TopicORM(Base):
         ForeignKey("themes.id", ondelete="CASCADE"), nullable=False, index=True
     )
     name: Mapped[str] = mapped_column(String(500), nullable=False)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=False), default=datetime.utcnow, nullable=False
     )
@@ -67,10 +76,31 @@ class TopicORM(Base):
     )
 
 
+class ThemeLevelGuidanceORM(Base):
+    __tablename__ = "theme_level_guidance"
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    theme_id: Mapped[int] = mapped_column(
+        ForeignKey("themes.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    level: Mapped[int] = mapped_column(Integer, nullable=False)
+    description: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=False), default=datetime.utcnow, nullable=False
+    )
+
+    __table_args__ = (
+        UniqueConstraint("theme_id", "level", name="uq_theme_level"),
+        CheckConstraint("level >= 1 AND level <= 5", name="ck_theme_level_range"),
+    )
+
+    theme: Mapped[ThemeORM] = relationship(back_populates="level_guidance")
+
+
 class RatingScaleORM(Base):
     __tablename__ = "rating_scale"
     level: Mapped[int] = mapped_column(Integer, primary_key=True)  # 1..5
     label: Mapped[str] = mapped_column(String(64), nullable=False)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     __table_args__ = (CheckConstraint("level >= 1 AND level <= 5", name="ck_level_range"),)
 
@@ -136,3 +166,4 @@ class AssessmentEntryORM(Base):
     )
 
     session: Mapped[AssessmentSessionORM] = relationship(back_populates="entries")
+

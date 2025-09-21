@@ -1,4 +1,4 @@
-"""
+﻿"""
 Application API layer with comprehensive error handling and validation.
 
 This module provides high-level functions for the assessment application
@@ -8,6 +8,8 @@ with proper error handling, user-friendly messages, and comprehensive logging.
 from __future__ import annotations
 
 from decimal import Decimal
+import json
+import math
 from typing import Any
 
 import pandas as pd
@@ -40,6 +42,7 @@ from ..infrastructure.repositories import (
     SessionRepo,
     TopicRepo,
 )
+from ..utils.resilience_radar import gradient_color, make_resilience_radar_with_theme_bars
 
 logger = get_logger(__name__)
 
@@ -404,6 +407,90 @@ def compute_dimension_averages(session: Session, session_id: int) -> list[Averag
         ) from e
 
 
+@log_operation("build_dashboard_figures")
+def build_dashboard_figures(session: Session, session_id: int) -> dict[str, Any]:
+    """Create Plotly-ready dashboard payload (dimension tiles + radar figure)."""
+
+    try:
+        set_context(operation="build_dashboard_figures", session_id=session_id)
+
+        # Ensure session exists
+        session_repo = SessionRepo(session)
+        session_repo.get_by_id_required(session_id)
+
+        # Dimension tiles (average + colour)
+        dimension_results = compute_dimension_averages(session, session_id=session_id)
+        tiles = []
+        for result in dimension_results:
+            avg_value = None
+            colour = None
+            if result.average is not None and not math.isnan(result.average):
+                avg_value = float(result.average)
+                colour = gradient_color(avg_value)
+            tiles.append(
+                {
+                    "id": result.id,
+                    "name": result.name,
+                    "average": avg_value,
+                    "coverage": float(result.coverage) if result.coverage is not None else None,
+                    "color": colour,
+                }
+            )
+
+        # Radar figure requires score rows per topic
+        radar_json: dict[str, Any] | None = None
+        topics_df = list_dimensions_with_topics(session)
+        entries = (
+            session.query(AssessmentEntryORM)
+            .filter(AssessmentEntryORM.session_id == session_id)
+            .all()
+        )
+
+        ratings_map: dict[int, float] = {}
+        for entry in entries:
+            if entry.is_na:
+                continue
+            if entry.computed_score is not None:
+                ratings_map[entry.topic_id] = float(entry.computed_score)
+            elif entry.rating_level is not None:
+                ratings_map[entry.topic_id] = float(entry.rating_level)
+
+        score_rows: list[dict[str, Any]] = []
+        for _, row in topics_df.iterrows():
+            topic_id = int(row["TopicID"])
+            score = ratings_map.get(topic_id)
+            if score is None:
+                continue
+            score_rows.append(
+                {
+                    "Dimension": row["Dimension"],
+                    "Theme": row["Theme"],
+                    "Question": row["Topic"],
+                    "Score": score,
+                }
+            )
+
+        if score_rows:
+            scores_df = pd.DataFrame(score_rows, columns=["Dimension", "Theme", "Question", "Score"])
+            figure = make_resilience_radar_with_theme_bars(scores_df)
+            radar_json = json.loads(figure.to_json())
+
+        return {"tiles": tiles, "radar": radar_json}
+
+    except Exception as e:  # pragma: no cover - bubbled as API error
+        error_details = log_error_details(e, {"session_id": session_id})
+        logger.error("Failed to build dashboard figures", extra=error_details)
+
+        if isinstance(e, ResilienceAssessmentError):
+            raise
+
+        raise ResilienceAssessmentError(
+            f"Failed to build dashboard for session {session_id}: {str(e)}",
+            details=error_details,
+            user_message="Unable to build dashboard visuals. Please try again.",
+        ) from e
+
+
 @log_operation("export_session_results")
 def export_session_results(session: Session, session_id: int) -> tuple[pd.DataFrame, pd.DataFrame]:
     """
@@ -720,3 +807,4 @@ def get_session_summary(session: Session, session_id: int) -> dict[str, Any]:
             details=error_details,
             user_message="Unable to load session summary. Please try again.",
         ) from e
+

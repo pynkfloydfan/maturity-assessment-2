@@ -23,6 +23,11 @@ pydantic-settings = "^2.0.0"
 pymysql = "^1.1.1"
 # Excel export
 XlsxWriter = "^3.2.0"
+fastapi = "^0.117.1"
+uvicorn = "^0.36.0"
+aiofiles = "^24.1.0"
+jinja2 = "^3.1.6"
+python-multipart = "^0.0.20"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.3.2"
@@ -58,7 +63,7 @@ combine-as-imports = true
 # These files legitimately have long lines or non-top imports:
 [tool.ruff.lint.per-file-ignores]
 "alembic/**/*.py" = ["E501"]             # migrations often have long lines
-"app/ui/styles.py" = ["E501"]            # CSS in triple-quoted strings
+"deprecated/streamlit/ui/styles.py" = ["E501"]            # CSS in triple-quoted strings
 "app/infrastructure/models.py" = ["E501"]# long SQL/constraints
 "streamlit_app.py" = ["E402"]            # we configure logging before imports by design
 
@@ -89,6 +94,8 @@ ignore_missing_imports = true
 lint = "ruff:__main__.main"
 format = "black:__main__.main"
 typecheck = "mypy:api"
+server = "scripts.run_server:main"
+seed-database = "scripts.seed_dataset:main"
 
 [build-system]
 requires = ["poetry-core"]

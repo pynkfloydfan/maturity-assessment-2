@@ -1,0 +1,17 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{{ app_title }}</title>
+    {% for href in styles %}
+    <link rel="stylesheet" href="{{ href }}" />
+    {% endfor %}
+  </head>
+  <body>
+    <div id="root"></div>
+    {% for src in scripts %}
+    <script type="module" src="{{ src }}"></script>
+    {% endfor %}
+  </body>
+</html>

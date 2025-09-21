@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import subprocess
 import sys
@@ -34,3 +34,4 @@ def seed_database_from_excel(cfg: DBConfig, excel_path: Path) -> tuple[int, str,
     cmd += ["--excel-path", str(excel_path)]
     res = subprocess.run(cmd, capture_output=True, text=True)
     return res.returncode, " ".join(cmd), res.stdout, res.stderr
+
