@@ -1,4 +1,5 @@
 import { Link, useParams } from "react-router-dom";
+import Breadcrumb from "./shared/Breadcrumb";
 import { useDimensions } from "../hooks/useDimensions";
 import { useThemes } from "../hooks/useThemes";
 
@@ -96,8 +97,14 @@ export default function ThemesPage() {
     );
   }
 
+  const breadcrumbItems = [
+    { label: "Dimensions", path: "/" },
+    { label: dimension.name },
+  ];
+
   return (
     <div className="page-section">
+      <Breadcrumb items={breadcrumbItems} />
       <div className="page-hero">
         <div className="pill">{dimension.name}</div>
         <div>

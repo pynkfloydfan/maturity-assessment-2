@@ -13,7 +13,7 @@ export default function TopicsPage() {
   const params = useParams<{ dimensionId: string; themeId: string }>();
   const dimensionId = params.dimensionId ? Number.parseInt(params.dimensionId, 10) : NaN;
   const themeId = params.themeId ? Number.parseInt(params.themeId, 10) : NaN;
-  const { activeSessionId } = useSessionContext();
+  const { activeSessionId, sessions } = useSessionContext();
   const { dimensions } = useDimensions();
   const { data, loading, error, refresh } = useThemeTopics({
     themeId: Number.isNaN(themeId) ? null : themeId,
@@ -145,14 +145,43 @@ export default function TopicsPage() {
     theme ? { label: theme.name } : undefined,
   ].filter(Boolean) as { label: string; path?: string }[];
 
+  const topicCount = data?.topics.length ?? 0;
+  const activeSession = sessions.find((session) => session.id === activeSessionId);
+  const statusText = saving ? "Saving…" : hasChanges ? "Unsaved changes" : "Up to date";
+
   return (
-    <div className="mx-auto flex max-w-6xl flex-col gap-6 px-6 py-10">
+    <div className="page-section">
       <Breadcrumb items={breadcrumbItems} />
       {theme && (
-        <header className="flex flex-col gap-2">
-          <h1 className="text-3xl font-semibold text-[#121417]">{theme.name}</h1>
-          {theme.description && <p className="max-w-3xl text-base leading-6 text-[#4d5c6e]">{theme.description}</p>}
-        </header>
+        <div className="page-hero">
+          <div className="pill">{dimension ? dimension.name : "Theme"}</div>
+          <div>
+            <h1>{theme.name}</h1>
+            {theme.description ? (
+              <p>{theme.description}</p>
+            ) : (
+              <p>Assess supporting topics for this theme and capture structured ratings.</p>
+            )}
+          </div>
+          <div className="status-card">
+            <div className="status-item">
+              <div className="status-label">Topics</div>
+              <div className="status-value">{loading ? "–" : topicCount}</div>
+            </div>
+            <div className="status-item">
+              <div className="status-label">Active session</div>
+              <div className="status-value">
+                {activeSession
+                  ? `#${activeSession.id}` + (activeSession.name ? ` · ${activeSession.name}` : "")
+                  : `#${activeSessionId}`}
+              </div>
+            </div>
+            <div className="status-item">
+              <div className="status-label">Status</div>
+              <div className="status-value">{statusText}</div>
+            </div>
+          </div>
+        </div>
       )}
       {data?.generic_guidance?.length ? (
         <aside className="rounded-xl border border-[#dfe4ed] bg-white p-4 text-sm text-[#4d5c6e] shadow-sm">
@@ -169,11 +198,11 @@ export default function TopicsPage() {
           </ul>
         </aside>
       ) : null}
-      <div className="flex items-center justify-between gap-4">
-        <div className="text-sm text-[#61758a]">
-          Session #{activeSessionId} · {data?.topics.length ?? 0} topics
+      <div className="page-toolbar">
+        <div className="page-toolbar__summary">
+          Session #{activeSessionId} · {topicCount} topics
         </div>
-        <div className="flex items-center gap-3">
+        <div className="page-toolbar__actions">
           {saveError && <span className="text-sm text-red-600">{saveError}</span>}
           {saveMessage && <span className="text-sm text-green-600">{saveMessage}</span>}
           <button

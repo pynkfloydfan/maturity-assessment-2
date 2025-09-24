@@ -306,6 +306,38 @@ body {
   gap: 48px;
 }
 
+.page-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  flex-wrap: wrap;
+}
+
+.page-toolbar__summary {
+  font-size: 14px;
+  color: var(--color-text-secondary);
+}
+
+.page-toolbar__actions {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+@media (max-width: 720px) {
+  .page-toolbar {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 16px;
+  }
+
+  .page-toolbar__actions {
+    justify-content: flex-start;
+  }
+}
+
 .settings-card {
   background: var(--color-card);
   border-radius: var(--radius-lg);
