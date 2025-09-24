@@ -1,5 +1,4 @@
 import { Link, useParams } from "react-router-dom";
-import Breadcrumb from "./shared/Breadcrumb";
 import { useDimensions } from "../hooks/useDimensions";
 import { useThemes } from "../hooks/useThemes";
 
@@ -46,9 +45,9 @@ function ThemeTile({
   return (
     <Link
       to={`/dimensions/${dimensionId}/themes/${themeId}/topics`}
-      className="flex w-56 flex-col gap-3 rounded-xl border border-[#e5e8eb] bg-white p-3 text-inherit no-underline shadow-sm transition hover:-translate-y-1 hover:shadow-md"
+      className="flex h-full flex-col rounded-2xl border border-[#d7deea] bg-white p-6 text-inherit no-underline shadow-sm transition-transform hover:-translate-y-1 hover:shadow-lg"
     >
-      <div className="h-36 w-full overflow-hidden rounded-lg bg-[#f3f5f9]">
+      <div className="relative mb-4 h-44 w-full overflow-hidden rounded-2xl bg-[#f5f7fb]">
         <img
           src={imageSrc}
           alt={title}
@@ -62,10 +61,10 @@ function ThemeTile({
           }}
         />
       </div>
-      <div className="flex flex-col gap-1">
+      <div className="flex flex-1 flex-col gap-2">
         <span className="text-xs uppercase tracking-wide text-[#61758a]">{category ?? "Theme"}</span>
-        <h3 className="text-base font-semibold text-[#121417]">{title}</h3>
-        <p className="text-sm leading-5 text-[#4d5c6e] line-clamp-3">
+        <h3 className="text-lg font-semibold text-[#121417] leading-tight">{title}</h3>
+        <p className="text-sm leading-6 text-[#4d5c6e] line-clamp-4">
           {description ?? "Review the topics and capture ratings for this theme."}
         </p>
       </div>
@@ -82,45 +81,56 @@ export default function ThemesPage() {
   const dimension = dimensions.find((item) => item.id === dimensionId);
 
   if (!dimensionId || Number.isNaN(dimensionId)) {
-    return (
-      <div className="mx-auto max-w-4xl px-6 py-10 text-[#61758a]">
-        Invalid dimension identifier provided.
-      </div>
-    );
+    return <div className="info-banner error">Invalid dimension identifier provided.</div>;
   }
 
   if (!dimension) {
     return (
-      <div className="mx-auto max-w-4xl px-6 py-10">
-        <div className="rounded-lg border border-dashed border-[#d0d7e3] bg-white p-10 text-center">
-          <h2 className="mb-2 text-xl font-semibold text-[#121417]">Dimension not found</h2>
-          <p className="mb-4 text-[#61758a]">The requested dimension is not available. Please return to the dimensions overview.</p>
-          <Link to="/" className="text-[#0d80f2] underline">Back to Dimensions</Link>
-        </div>
+      <div className="card">
+        <h2 className="settings-heading">Dimension not found</h2>
+        <p className="settings-subcopy">
+          The requested dimension is not available. Please return to the Dimensions overview.
+        </p>
+        <Link to="/" className="muted-link">Back to Dimensions</Link>
       </div>
     );
   }
 
   return (
-    <div className="mx-auto flex max-w-6xl flex-col gap-6 px-6 py-10">
-      <Breadcrumb items={[{ label: "Dimensions", path: "/" }, { label: dimension.name }]} />
-      <header className="flex flex-col gap-2">
-        <h1 className="text-3xl font-semibold text-[#121417]">{dimension.name} · Themes</h1>
-        <p className="max-w-3xl text-base leading-6 text-[#4d5c6e]">
-          Select a theme to review its topics and update assessment ratings. The descriptive copy is sourced from the enhanced resilience framework.
-        </p>
-        <span className="text-sm text-[#61758a]">
-          {loading ? "–" : themes.length} themes
-        </span>
-      </header>
-      {loading && <div className="text-sm text-[#61758a]">Loading themes…</div>}
-      {error && <div className="text-sm text-red-600">{error}</div>}
+    <div className="page-section">
+      <div className="page-hero">
+        <div className="pill">{dimension.name}</div>
+        <div>
+          <h1>Navigate themes &amp; prioritise focus areas</h1>
+          <p>
+            Each theme explores a focused capability within {dimension.name}. Choose a tile to review
+            descriptive guidance and capture topic-level ratings with confidence.
+          </p>
+        </div>
+        <div className="status-card">
+          <div className="status-item">
+            <div className="status-label">Themes</div>
+            <div className="status-value">{loading ? "–" : themes.length}</div>
+          </div>
+          <div className="status-item">
+            <div className="status-label">Dimension</div>
+            <div className="status-value">{dimension.name}</div>
+          </div>
+        </div>
+      </div>
+
+      {error && <div className="info-banner error">{error}</div>}
+      {loading && <div className="info-banner">Loading themes…</div>}
       {!loading && !error && themes.length === 0 && (
-        <div className="rounded-lg border border-dashed border-[#d0d7e3] bg-white p-8 text-center text-[#61758a]">
-          No themes found for this dimension.
+        <div className="card">
+          <h2 className="settings-heading">No themes available</h2>
+          <p className="settings-subcopy">
+            Seed the dataset or refresh the framework to populate the theme catalogue.
+          </p>
         </div>
       )}
-      <div className="flex flex-wrap gap-6">
+
+      <div className="themes-grid">
         {themes.map((theme) => {
           const dimensionSlug = DIMENSION_SLUGS[dimension.name] ?? slugify(dimension.name);
           const themeSlug = slugify(theme.name);

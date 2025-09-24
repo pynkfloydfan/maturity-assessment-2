@@ -187,6 +187,8 @@ Perform these steps whenever you want a quick end-to-end verification:
   `app/web/static/images/themes/<dimension>/<theme>.png` (slugified names). If no
   theme-specific file is present, the UI falls back to the parent dimension
   image.
+- Colour tokens (CSS variables beginning with `--color-`) live near the top of
+  `frontend/src/index.css`. Adjust these to personalise the palette and typography.
 
 ## Next steps
 

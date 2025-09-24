@@ -1,5 +1,4 @@
 import { Link } from "react-router-dom";
-import Breadcrumb from "./shared/Breadcrumb";
 import { useDimensions } from "../hooks/useDimensions";
 
 const DIMENSION_SLUGS: Record<string, string> = {
@@ -32,13 +31,12 @@ function DimensionTile({
   description?: string | null;
   imageSrc: string;
 }) {
-
   return (
     <Link
       to={`/dimensions/${id}/themes`}
-      className="flex w-56 flex-col gap-3 rounded-xl border border-[#e5e8eb] bg-white p-3 text-inherit no-underline shadow-sm transition hover:-translate-y-1 hover:shadow-md"
+      className="flex h-full flex-col rounded-2xl border border-[#d7deea] bg-white p-6 text-inherit no-underline shadow-sm transition-transform hover:-translate-y-1 hover:shadow-lg"
     >
-      <div className="h-40 w-full overflow-hidden rounded-lg bg-[#f5f7fb]">
+      <div className="relative mb-4 h-48 w-full overflow-hidden rounded-2xl bg-[#f5f7fb]">
         <img
           src={imageSrc}
           alt={title}
@@ -50,9 +48,9 @@ function DimensionTile({
           }}
         />
       </div>
-      <div className="flex flex-col gap-1">
-        <h3 className="text-base font-semibold text-[#121417]">{title}</h3>
-        <p className="text-sm leading-5 text-[#4d5c6e] line-clamp-3">
+      <div className="flex flex-1 flex-col gap-2">
+        <h3 className="text-lg font-semibold text-[#121417] leading-tight">{title}</h3>
+        <p className="text-sm leading-6 text-[#4d5c6e] line-clamp-4">
           {description ?? "Explore the themes and topics captured within this dimension."}
         </p>
       </div>
@@ -78,18 +76,50 @@ function PageHeader({ dimensionCount, loading }: { dimensionCount: number; loadi
 export default function DimensionsPage() {
   const { dimensions, loading, error } = useDimensions();
 
+  const dimensionCount = dimensions.length;
+  const themeCount = dimensions.reduce((acc, item) => acc + (item.theme_count ?? 0), 0);
+
   return (
-    <div className="mx-auto flex max-w-6xl flex-col gap-6 px-6 py-10">
-      <Breadcrumb items={[{ label: "Dimensions" }]} />
-      <PageHeader dimensionCount={dimensions.length} loading={loading} />
-      {loading && <div className="text-sm text-[#61758a]">Loading dimensions…</div>}
-      {error && <div className="text-sm text-red-600">{error}</div>}
-      {!loading && !error && dimensions.length === 0 && (
-        <div className="rounded-lg border border-dashed border-[#d0d7e3] bg-white p-8 text-center text-[#61758a]">
-          No framework data found. Seed the database from Settings to begin.
+    <div className="page-section">
+      <div className="page-hero">
+        <div className="pill">Dimension Library</div>
+        <div>
+          <h1>Explore your resilience landscape</h1>
+          <p>
+            Navigate every dimension of the operational resilience framework with richer guidance,
+            imagery, and at-a-glance insights. Select a card to drill into themes and capture
+            structured assessments.
+          </p>
+        </div>
+        <div className="status-card">
+          <div className="status-item">
+            <div className="status-label">Dimensions</div>
+            <div className="status-value">{loading ? "–" : dimensionCount}</div>
+          </div>
+          <div className="status-item">
+            <div className="status-label">Themes</div>
+            <div className="status-value">{loading ? "–" : themeCount}</div>
+          </div>
+          <div className="status-item">
+            <div className="status-label">Imagery</div>
+            <div className="status-value">Curated</div>
+          </div>
+        </div>
+      </div>
+
+      {error && <div className="info-banner error">{error}</div>}
+      {loading && <div className="info-banner">Loading dimensions…</div>}
+      {!loading && !error && dimensionCount === 0 && (
+        <div className="card">
+          <h2 className="settings-heading">No data found</h2>
+          <p className="settings-subcopy">
+            Seed the database from the Settings page to load the enhanced operational resilience
+            framework.
+          </p>
         </div>
       )}
-      <div className="flex flex-wrap gap-6">
+
+      <div className="dimensions-grid">
         {dimensions.map((dimension) => {
           const imageSrc = makeDimensionImagePath(dimension.name);
           return (

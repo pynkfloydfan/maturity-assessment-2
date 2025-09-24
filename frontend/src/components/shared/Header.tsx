@@ -1,4 +1,4 @@
-import { ChangeEvent } from "react";
+import { ChangeEvent, useMemo } from "react";
 import { Link, NavLink } from "react-router-dom";
 import avatarImage from "../../assets/user-avatar.png";
 import { useSessionContext } from "../../context/SessionContext";
@@ -14,6 +14,16 @@ function HeaderIcon() {
 export default function Header() {
   const { sessions, activeSessionId, selectSession, loading, error } = useSessionContext();
 
+  const navLinks = useMemo(
+    () => [
+      { label: "Dimensions", to: "/" },
+      { label: "Dashboard", to: "/dashboard" },
+      { label: "Settings", to: "/settings" },
+      { label: "Help", to: "/help" },
+    ],
+    [],
+  );
+
   const handleSessionChange = (event: ChangeEvent<HTMLSelectElement>) => {
     const value = event.target.value;
     if (!value) {
@@ -23,30 +33,34 @@ export default function Header() {
     selectSession(Number.parseInt(value, 10));
   };
 
+  const activeSession = sessions.find((session) => session.id === activeSessionId);
+
   return (
-    <div className="w-full border-b border-[#e5e8eb] bg-white">
-      <div className="flex flex-wrap items-center justify-between gap-4 px-10 py-3">
-        <div className="flex items-center gap-4">
+    <header className="app-header">
+      <div className="app-container header-bar">
+        <div className="brand-block">
           <HeaderIcon />
-          <Link to="/" className="text-lg font-bold text-[#121417] no-underline">
-            Resilience Platform
-          </Link>
+          <div>
+            <Link to="/" className="brand-title">
+              Resilience Studio
+            </Link>
+            <div className="brand-subtitle">Operational maturity insights</div>
+          </div>
         </div>
-        <div className="flex flex-wrap items-center gap-8">
-          <nav className="flex items-center gap-9 text-sm">
-            <NavLink to="/" className={({ isActive }) => (isActive ? "text-[#121417] font-medium" : "text-[#61758a] font-medium")}>Dimensions</NavLink>
-            <NavLink to="/assessments" className={({ isActive }) => (isActive ? "text-[#121417] font-medium" : "text-[#61758a] font-medium")}>Assessments</NavLink>
-            <NavLink to="/dashboard" className={({ isActive }) => (isActive ? "text-[#121417] font-medium" : "text-[#61758a] font-medium")}>Dashboard</NavLink>
-            <NavLink to="/settings" className={({ isActive }) => (isActive ? "text-[#121417] font-medium" : "text-[#61758a] font-medium")}>Settings</NavLink>
-            <NavLink to="/help" className={({ isActive }) => (isActive ? "text-[#121417] font-medium" : "text-[#61758a] font-medium")}>Help</NavLink>
-          </nav>
-          <div className="flex items-center gap-3">
-            <label className="text-xs uppercase tracking-wide text-[#61758a]" htmlFor="session-picker">
-              Active Session
-            </label>
+
+        <nav className="nav-links">
+          {navLinks.map((link) => (
+            <NavLink key={link.to} to={link.to} className={({ isActive }) => `nav-link${isActive ? " active" : ""}`}>
+              {link.label}
+            </NavLink>
+          ))}
+        </nav>
+
+        <div className="header-actions">
+          <div className="session-select">
+            <label htmlFor="session-picker">Active session</label>
             <select
               id="session-picker"
-              className="min-w-[220px] rounded-md border border-[#d0d7e3] bg-white px-3 py-1.5 text-sm focus:border-[#0d80f2] focus:outline-none"
               value={activeSessionId ?? ""}
               onChange={handleSessionChange}
               disabled={loading || sessions.length === 0}
@@ -61,15 +75,38 @@ export default function Header() {
                 ))
               )}
             </select>
-            {error && <span className="text-xs text-red-600">{error}</span>}
           </div>
-          <div
-            className="h-10 w-10 overflow-hidden rounded-full border border-[#e1e6ef]"
-          >
+          <button type="button" className="btn-secondary">
+            Support
+          </button>
+          <div className="avatar-frame">
             <img src={avatarImage} alt="User" className="h-full w-full object-cover" />
           </div>
         </div>
       </div>
-    </div>
+
+      <div className="header-sub">
+        <div className="app-container header-metrics">
+          <div className="metric-chip">
+            <div className="metric-label">Active session</div>
+            <div className="metric-value">{activeSession ? activeSession.name : "None selected"}</div>
+          </div>
+          <div className="metric-chip">
+            <div className="metric-label">Sessions available</div>
+            <div className="metric-value">{sessions.length}</div>
+          </div>
+          <div className="metric-chip">
+            <div className="metric-label">Status</div>
+            <div className="metric-value">{loading ? "Loading…" : "Ready"}</div>
+          </div>
+        </div>
+      </div>
+
+      {error && (
+        <div className="app-container info-banner error" style={{ marginBottom: "0" }}>
+          {error}
+        </div>
+      )}
+    </header>
   );
 }

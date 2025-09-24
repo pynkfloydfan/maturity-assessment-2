@@ -60,6 +60,7 @@ router = APIRouter(prefix="/api")
 logger = logging.getLogger(__name__)
 
 APP_DIR = Path(__file__).resolve().parents[2]
+PROJECT_ROOT = APP_DIR.parent
 DEFAULT_EXCEL_PATH = (APP_DIR / "source_data" / "enhanced_operational_resilience_maturity_v6.xlsx").resolve()
 
 
@@ -184,7 +185,10 @@ def seed_database_endpoint(
     config = _merge_config(request, payload)
     excel_path = DEFAULT_EXCEL_PATH
     if payload and payload.excel_path:
-        excel_path = Path(payload.excel_path).expanduser().resolve()
+        excel_input = Path(payload.excel_path).expanduser()
+        if not excel_input.is_absolute():
+            excel_input = PROJECT_ROOT / excel_input
+        excel_path = excel_input.resolve()
 
     if not excel_path.exists():
         message = f"Excel file not found at {excel_path}"
