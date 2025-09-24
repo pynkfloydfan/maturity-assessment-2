@@ -749,6 +749,55 @@ body {
   color: rgba(10, 31, 68, 0.65);
 }
 
+.dashboard-tabs {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.dashboard-tabs__list {
+  width: fit-content;
+}
+
+.dashboard-panel {
+  border-radius: var(--radius-lg);
+  border: 1px solid rgba(0, 47, 108, 0.08);
+  background: var(--color-card);
+  box-shadow: var(--shadow-soft);
+  padding: 32px;
+}
+
+.heatmap-grid {
+  display: grid;
+  gap: 24px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-auto-rows: minmax(160px, 1fr);
+}
+
+.heatmap-tile {
+  height: 100%;
+}
+
+.radar-wrapper {
+  min-height: 380px;
+}
+
+@media (max-width: 1180px) {
+  .heatmap-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 780px) {
+  .dashboard-panel {
+    padding: 24px;
+  }
+
+  .heatmap-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 .form-grid {
   display: grid;
   gap: 20px;

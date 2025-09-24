@@ -1,9 +1,11 @@
+import { useMemo } from "react";
 import createPlotlyComponent from "react-plotly.js/factory";
 import Plotly from "plotly.js-dist-min";
 import { useSessionContext } from "../context/SessionContext";
 import { usePageBreadcrumb } from "../context/BreadcrumbContext";
 import { getDimensionTiles, getRadarFigure, useDashboard } from "../hooks/useDashboard";
 import type { DashboardTile } from "../api/types";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "./ui/tabs";
 
 const Plot = createPlotlyComponent(Plotly);
 
@@ -14,7 +16,7 @@ function Tile({ tile }: { tile: DashboardTile }) {
 
   return (
     <div
-      className="flex min-w-[180px] flex-1 flex-col gap-2 rounded-xl border border-[#e1e6ef] bg-white p-4 shadow-sm"
+      className="heatmap-tile flex min-w-[180px] flex-col gap-2 rounded-xl border border-[#e1e6ef] bg-white p-4 shadow-sm"
       style={{ borderColor: tile.color ? tile.color : "#e1e6ef" }}
     >
       <span className="text-sm font-medium text-[#61758a]">{tile.name}</span>
@@ -34,10 +36,40 @@ function Tile({ tile }: { tile: DashboardTile }) {
 
 export default function DashboardPage() {
   const { activeSessionId } = useSessionContext();
-  const { data, figures, loading, error } = useDashboard(activeSessionId);
+  const { figures, loading, error } = useDashboard(activeSessionId);
   const tiles = getDimensionTiles(figures);
   const radar = getRadarFigure(figures);
   usePageBreadcrumb(null);
+
+  const tileMetrics = useMemo(() => {
+    if (!tiles.length) {
+      return { coverage: null as number | null, average: null as number | null };
+    }
+    let coverageSum = 0;
+    let coverageCount = 0;
+    let averageSum = 0;
+    let averageCount = 0;
+    tiles.forEach((tile) => {
+      if (typeof tile.coverage === "number") {
+        coverageSum += tile.coverage;
+        coverageCount += 1;
+      }
+      if (typeof tile.average === "number") {
+        averageSum += tile.average;
+        averageCount += 1;
+      }
+    });
+    return {
+      coverage: coverageCount ? Math.round((coverageSum / coverageCount) * 100) : null,
+      average: averageCount ? averageSum / averageCount : null,
+    };
+  }, [tiles]);
+
+  const coverageDisplay = tileMetrics.coverage == null ? "–" : `${tileMetrics.coverage}%`;
+  const averageDisplay = tileMetrics.average == null ? "–" : tileMetrics.average.toFixed(1);
+  const tileCount = tiles.length;
+  const hasTiles = !loading && !error && tileCount > 0;
+  const hasRadar = !loading && !error && Boolean(radar);
 
   if (!activeSessionId) {
     return (
@@ -51,21 +83,44 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="mx-auto flex max-w-6xl flex-col gap-6 px-6 py-10">
-      <div className="flex items-center justify-between">
+    <div className="page-section">
+      <div className="page-hero">
+        <div className="pill">Dashboard</div>
         <div>
-          <h1 className="text-3xl font-semibold text-[#121417]">Dashboard</h1>
-          <p className="text-sm text-[#61758a]">Session #{activeSessionId}</p>
+          <h1>Operational maturity snapshot</h1>
+          <p>
+            Review resilience performance for session #{activeSessionId} using the heatmap or radar
+            visualisations. Export the underlying data to continue your analysis.
+          </p>
         </div>
-        <div className="flex gap-3">
+        <div className="status-card">
+          <div className="status-item">
+            <div className="status-label">Active session</div>
+            <div className="status-value">#{activeSessionId}</div>
+          </div>
+          <div className="status-item">
+            <div className="status-label">Maturity tiles</div>
+            <div className="status-value">{loading ? "–" : tileCount || "–"}</div>
+          </div>
+          <div className="status-item">
+            <div className="status-label">Average coverage / score</div>
+            <div className="status-value">{loading ? "–" : `${coverageDisplay} · ${averageDisplay}`}</div>
+            <div className="status-note">Heatmap coverage · mean score</div>
+          </div>
+        </div>
+      </div>
+
+      <div className="page-toolbar">
+        <div className="page-toolbar__summary">Session #{activeSessionId}</div>
+        <div className="page-toolbar__actions">
           <a
-            className="rounded-md border border-[#d0d7e3] px-4 py-2 text-sm font-medium text-[#0d80f2]"
+            className="btn-secondary"
             href={`/api/sessions/${activeSessionId}/exports/json`}
           >
             Download JSON
           </a>
           <a
-            className="rounded-md border border-[#d0d7e3] px-4 py-2 text-sm font-medium text-[#0d80f2]"
+            className="btn-secondary"
             href={`/api/sessions/${activeSessionId}/exports/xlsx`}
           >
             Download XLSX
@@ -73,65 +128,52 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {loading && <div className="text-sm text-[#61758a]">Loading dashboard…</div>}
-      {error && <div className="text-sm text-red-600">{error}</div>}
+      {loading && <div className="info-banner">Loading dashboard…</div>}
+      {error && <div className="info-banner error">{error}</div>}
 
-      {!loading && !error && tiles.length > 0 && (
-        <section className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {tiles.map((tile) => (
-            <Tile key={tile.id} tile={tile} />
-          ))}
-        </section>
-      )}
+      <Tabs defaultValue="heatmap" className="dashboard-tabs">
+        <TabsList className="dashboard-tabs__list">
+          <TabsTrigger value="heatmap">Maturity Heatmap</TabsTrigger>
+          <TabsTrigger value="radar">Radar plot</TabsTrigger>
+        </TabsList>
 
-      {!loading && !error && radar && (
-        <section className="rounded-xl border border-[#e1e6ef] bg-white p-4 shadow-sm">
-          <Plot
-            data={radar.data}
-            layout={{ ...radar.layout, autosize: true, height: 560 }}
-            frames={radar.frames ?? []}
-            config={{ displaylogo: false, responsive: true }}
-            useResizeHandler
-            style={{ width: "100%", height: "100%" }}
-          />
-        </section>
-      )}
-
-      {!loading && !error && (!radar || !tiles.length) && (
-        <div className="rounded-lg border border-dashed border-[#d0d7e3] bg-white p-8 text-center text-[#61758a]">
-          Not enough ratings yet to build the dashboard visuals.
-        </div>
-      )}
-
-      {data && data.topic_scores.length > 0 && (
-        <section className="rounded-xl border border-[#e1e6ef] bg-white p-4 shadow-sm">
-          <h2 className="mb-4 text-lg font-semibold text-[#121417]">Topic ratings</h2>
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-[#e1e6ef] text-sm">
-              <thead className="bg-[#f9fbfd] text-[#61758a]">
-                <tr>
-                  <th className="px-4 py-2 text-left">Dimension</th>
-                  <th className="px-4 py-2 text-left">Theme</th>
-                  <th className="px-4 py-2 text-left">Topic</th>
-                  <th className="px-4 py-2 text-left">Score</th>
-                  <th className="px-4 py-2 text-left">Source</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-[#eef2f9] bg-white text-[#121417]">
-                {data.topic_scores.map((row) => (
-                  <tr key={row.topic_id}>
-                    <td className="px-4 py-2">{row.dimension_name}</td>
-                    <td className="px-4 py-2">{row.theme_name}</td>
-                    <td className="px-4 py-2">{row.topic_name}</td>
-                    <td className="px-4 py-2">{row.score.toFixed(2)}</td>
-                    <td className="px-4 py-2">{row.source === "computed" ? "Computed" : "Rating"}</td>
-                  </tr>
+        <TabsContent value="heatmap">
+          {hasTiles ? (
+            <section className="dashboard-panel">
+              <div className="heatmap-grid">
+                {tiles.map((tile) => (
+                  <Tile key={tile.id} tile={tile} />
                 ))}
-              </tbody>
-            </table>
-          </div>
-        </section>
-      )}
+              </div>
+            </section>
+          ) : (
+            <div className="info-banner" role="status">
+              {loading ? "Building maturity tiles…" : "No maturity data available yet."}
+            </div>
+          )}
+        </TabsContent>
+
+        <TabsContent value="radar">
+          {hasRadar ? (
+            <section className="dashboard-panel">
+              <div className="radar-wrapper">
+                <Plot
+                  data={radar!.data}
+                  layout={{ ...radar!.layout, autosize: true, height: 560 }}
+                  frames={radar!.frames ?? []}
+                  config={{ displaylogo: false, responsive: true }}
+                  useResizeHandler
+                  style={{ width: "100%", height: "100%" }}
+                />
+              </div>
+            </section>
+          ) : (
+            <div className="info-banner" role="status">
+              {loading ? "Preparing radar visual…" : "Radar plot unavailable for this session."}
+            </div>
+          )}
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }
