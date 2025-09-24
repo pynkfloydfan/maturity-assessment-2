@@ -70,12 +70,11 @@ product that makes better use of widescreen layouts.
 
 ## 7. Deliverables Checklist
 
-- [ ] Global theme tokens file (colours, typography, spacing).
-- [ ] Updated layout shell (top nav + content container).
-- [ ] Dimension card component + responsive grid.
-- [ ] Themes page refactor using card grid.
-- [ ] Settings page two-column redesign with status cards.
+- [x] Global theme tokens file (colours, typography, spacing).
+- [x] Updated layout shell (top nav + content container).
+- [x] Dimension card component + responsive grid.
+- [x] Themes page refactor using card grid.
+- [x] Settings page two-column redesign with status cards.
 - [ ] Documentation updates (README + future design notes).
 - [ ] Visual polish: shadows, hover states, badge styles.
 - [ ] Optional: new icons/illustrations (depends on asset selection).
-

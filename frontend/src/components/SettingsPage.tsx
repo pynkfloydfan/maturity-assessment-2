@@ -202,248 +202,307 @@ export default function SettingsPage() {
   }, [sessions]);
 
   return (
-    <div className="mx-auto flex max-w-6xl flex-col gap-8 px-6 py-10">
+    <div className="page-section">
       <Breadcrumb items={[{ label: "Settings" }]} />
-      <section className="rounded-xl border border-[#e1e6ef] bg-white p-6 shadow-sm">
-        <h2 className="text-xl font-semibold text-[#121417]">Database configuration</h2>
-        <p className="mt-1 text-sm text-[#61758a]">Switch between SQLite and MySQL backends, then initialise or seed the data.</p>
 
-        <div className="mt-4 flex flex-col gap-4">
-          <div className="flex gap-6">
-            <label className="flex items-center gap-2 text-sm text-[#121417]">
-              <input
-                type="radio"
-                name="backend"
-                value="sqlite"
-                checked={dbForm.backend === "sqlite"}
-                onChange={handleBackendChange}
-              />
-              SQLite
-            </label>
-            <label className="flex items-center gap-2 text-sm text-[#121417]">
-              <input
-                type="radio"
-                name="backend"
-                value="mysql"
-                checked={dbForm.backend === "mysql"}
-                onChange={handleBackendChange}
-              />
-              MySQL
-            </label>
-          </div>
-
-          {dbForm.backend === "sqlite" && (
-            <div className="flex flex-col">
-              <label className="text-sm font-medium text-[#121417]" htmlFor="sqlite_path">SQLite path</label>
-              <input
-                id="sqlite_path"
-                name="sqlite_path"
-                className="mt-1 rounded-md border border-[#d0d7e3] px-3 py-2 text-sm"
-                value={dbForm.sqlite_path}
-                onChange={handleChange}
-              />
-            </div>
-          )}
-
-          {dbForm.backend === "mysql" && (
-            <div className="grid gap-4 md:grid-cols-2">
-              <div className="flex flex-col">
-                <label className="text-sm font-medium text-[#121417]" htmlFor="mysql_host">Host</label>
-                <input
-                  id="mysql_host"
-                  name="mysql_host"
-                  className="mt-1 rounded-md border border-[#d0d7e3] px-3 py-2 text-sm"
-                  value={dbForm.mysql_host}
-                  onChange={handleChange}
-                />
-              </div>
-              <div className="flex flex-col">
-                <label className="text-sm font-medium text-[#121417]" htmlFor="mysql_port">Port</label>
-                <input
-                  id="mysql_port"
-                  name="mysql_port"
-                  className="mt-1 rounded-md border border-[#d0d7e3] px-3 py-2 text-sm"
-                  value={dbForm.mysql_port}
-                  onChange={handleChange}
-                />
-              </div>
-              <div className="flex flex-col">
-                <label className="text-sm font-medium text-[#121417]" htmlFor="mysql_user">User</label>
-                <input
-                  id="mysql_user"
-                  name="mysql_user"
-                  className="mt-1 rounded-md border border-[#d0d7e3] px-3 py-2 text-sm"
-                  value={dbForm.mysql_user}
-                  onChange={handleChange}
-                />
-              </div>
-              <div className="flex flex-col">
-                <label className="text-sm font-medium text-[#121417]" htmlFor="mysql_password">Password</label>
-                <input
-                  id="mysql_password"
-                  name="mysql_password"
-                  type="password"
-                  className="mt-1 rounded-md border border-[#d0d7e3] px-3 py-2 text-sm"
-                  value={dbForm.mysql_password}
-                  onChange={handleChange}
-                />
-              </div>
-              <div className="flex flex-col">
-                <label className="text-sm font-medium text-[#121417]" htmlFor="mysql_database">Database</label>
-                <input
-                  id="mysql_database"
-                  name="mysql_database"
-                  className="mt-1 rounded-md border border-[#d0d7e3] px-3 py-2 text-sm"
-                  value={dbForm.mysql_database}
-                  onChange={handleChange}
-                />
-              </div>
-            </div>
-          )}
-
-          <div className="flex flex-wrap gap-3">
-            <button
-              type="button"
-              className="rounded-md bg-[#0d80f2] px-4 py-2 text-sm font-medium text-white shadow"
-              onClick={handleSaveConfig}
-            >
-              Save configuration
-            </button>
-            <button
-              type="button"
-              className="rounded-md border border-[#d0d7e3] px-4 py-2 text-sm font-medium text-[#121417]"
-              onClick={handleInit}
-            >
-              Initialise tables
-            </button>
-          </div>
-
-          {dbFeedback && (
-            <p className={`text-sm ${dbFeedback.type === "success" ? "text-green-600" : "text-red-600"}`}>
-              {dbFeedback.message}
-            </p>
-          )}
-        </div>
-      </section>
-
-      <section className="rounded-xl border border-[#e1e6ef] bg-white p-6 shadow-sm">
-        <h2 className="text-xl font-semibold text-[#121417]">Seed dataset</h2>
-        <p className="mt-1 text-sm text-[#61758a]">Populate dimensions, themes, and guidance from the enhanced spreadsheet.</p>
-        <div className="mt-4 flex flex-col gap-3">
-          <label className="text-sm font-medium text-[#121417]" htmlFor="excel_path">Spreadsheet path</label>
-          <input
-            id="excel_path"
-            className="rounded-md border border-[#d0d7e3] px-3 py-2 text-sm"
-            value={excelPath}
-            onChange={(event) => setExcelPath(event.target.value)}
-          />
-          <div className="flex gap-3">
-            <button
-              type="button"
-              className="rounded-md bg-[#0d80f2] px-4 py-2 text-sm font-medium text-white shadow"
-              onClick={handleSeed}
-            >
-              Seed from Excel
-            </button>
-            <button
-              type="button"
-              className="rounded-md border border-[#d0d7e3] px-4 py-2 text-sm font-medium text-[#121417]"
-              onClick={refreshSessions}
-            >
-              Refresh sessions
-            </button>
-          </div>
-          {seedFeedback && (
-            <p className={`text-sm ${seedFeedback.type === "success" ? "text-green-600" : "text-red-600"}`}>
-              {seedFeedback.message}
-            </p>
-          )}
-          {seedDetails && (
-            <pre className="max-h-60 overflow-auto rounded-md bg-[#f5f7fb] p-3 text-xs text-[#121417]">{seedDetails}</pre>
-          )}
-        </div>
-      </section>
-
-      <section className="rounded-xl border border-[#e1e6ef] bg-white p-6 shadow-sm">
-        <h2 className="text-xl font-semibold text-[#121417]">Sessions</h2>
-        <p className="mt-1 text-sm text-[#61758a]">Create new sessions or combine existing ones into a master.</p>
-        <div className="mt-4 grid gap-6 md:grid-cols-2">
-          <form className="flex flex-col gap-3" onSubmit={handleCreateSession}>
-            <h3 className="text-lg font-medium text-[#121417]">Create session</h3>
-            <input
-              className="rounded-md border border-[#d0d7e3] px-3 py-2 text-sm"
-              placeholder="Session name"
-              value={newSession.name}
-              onChange={(event) => setNewSession((prev) => ({ ...prev, name: event.target.value }))}
-            />
-            <input
-              className="rounded-md border border-[#d0d7e3] px-3 py-2 text-sm"
-              placeholder="Assessor (optional)"
-              value={newSession.assessor}
-              onChange={(event) => setNewSession((prev) => ({ ...prev, assessor: event.target.value }))}
-            />
-            <input
-              className="rounded-md border border-[#d0d7e3] px-3 py-2 text-sm"
-              placeholder="Organization (optional)"
-              value={newSession.organization}
-              onChange={(event) => setNewSession((prev) => ({ ...prev, organization: event.target.value }))}
-            />
-            <input
-              className="rounded-md border border-[#d0d7e3] px-3 py-2 text-sm"
-              placeholder="Notes (optional)"
-              value={newSession.notes}
-              onChange={(event) => setNewSession((prev) => ({ ...prev, notes: event.target.value }))}
-            />
-            <button
-              type="submit"
-              className="self-start rounded-md bg-[#0d80f2] px-4 py-2 text-sm font-medium text-white shadow"
-            >
-              Create session
-            </button>
-          </form>
-
-          <div className="flex flex-col gap-3">
-            <h3 className="text-lg font-medium text-[#121417]">Combine sessions</h3>
-            <label className="text-sm text-[#61758a]" htmlFor="combine_select">
-              Hold Ctrl/Cmd to select multiple sessions
-            </label>
-            <select
-              id="combine_select"
-              className="h-40 rounded-md border border-[#d0d7e3] px-3 py-2 text-sm"
-              multiple
-              value={combineSelection}
-              onChange={(event) => {
-                const values = Array.from(event.target.selectedOptions).map((option) => option.value);
-                setCombineSelection(values);
-              }}
-            >
-              {sortedSessions.map((session) => (
-                <option key={session.id} value={String(session.id)}>
-                  #{session.id} · {session.name}
-                </option>
-              ))}
-            </select>
-            <input
-              className="rounded-md border border-[#d0d7e3] px-3 py-2 text-sm"
-              value={combineName}
-              onChange={(event) => setCombineName(event.target.value)}
-              placeholder="Master session name"
-            />
-            <button
-              type="button"
-              className="self-start rounded-md border border-[#d0d7e3] px-4 py-2 text-sm font-medium text-[#121417]"
-              onClick={handleCombineSessions}
-            >
-              Combine selected
-            </button>
-          </div>
-        </div>
-        {sessionFeedback && (
-          <p className={`mt-2 text-sm ${sessionFeedback.type === "success" ? "text-green-600" : "text-red-600"}`}>
-            {sessionFeedback.message}
+      <div className="page-hero">
+        <div className="pill">Workspace Controls</div>
+        <div>
+          <h1>Configure your resilience studio</h1>
+          <p>
+            Manage database connectivity, seed the enhanced dataset, and orchestrate assessment
+            sessions without leaving the Settings hub.
           </p>
-        )}
-      </section>
+        </div>
+        <div className="status-card">
+          <div className="status-item">
+            <div className="status-label">Database backend</div>
+            <div className="status-value">{dbForm.backend === "mysql" ? "MySQL" : "SQLite"}</div>
+          </div>
+          <div className="status-item">
+            <div className="status-label">Sessions available</div>
+            <div className="status-value">{sessions.length}</div>
+          </div>
+          <div className="status-item">
+            <div className="status-label">Spreadsheet source</div>
+            <div className="status-value">{excelPath ? "Configured" : "Not set"}</div>
+          </div>
+        </div>
+      </div>
+
+      <div className="settings-grid">
+        <div className="settings-column">
+          <section className="settings-card">
+            <div className="settings-card-header">
+              <h2 className="settings-card-title">Database configuration</h2>
+              <p className="settings-card-subtitle">
+                Switch between SQLite and MySQL backends, then initialise the schema when you’re ready.
+              </p>
+            </div>
+
+            <div className="radio-row" role="radiogroup" aria-label="Database backend">
+              <label className="radio-pill" htmlFor="backend-sqlite">
+                <input
+                  id="backend-sqlite"
+                  type="radio"
+                  name="backend"
+                  value="sqlite"
+                  checked={dbForm.backend === "sqlite"}
+                  onChange={handleBackendChange}
+                />
+                <span>SQLite</span>
+              </label>
+              <label className="radio-pill" htmlFor="backend-mysql">
+                <input
+                  id="backend-mysql"
+                  type="radio"
+                  name="backend"
+                  value="mysql"
+                  checked={dbForm.backend === "mysql"}
+                  onChange={handleBackendChange}
+                />
+                <span>MySQL</span>
+              </label>
+            </div>
+
+            {dbForm.backend === "sqlite" && (
+              <div className="form-grid">
+                <label className="field-group" htmlFor="sqlite_path">
+                  <span className="field-label">SQLite path</span>
+                  <input
+                    id="sqlite_path"
+                    name="sqlite_path"
+                    className="input-control"
+                    value={dbForm.sqlite_path}
+                    onChange={handleChange}
+                  />
+                </label>
+              </div>
+            )}
+
+            {dbForm.backend === "mysql" && (
+              <div className="form-grid two-column">
+                <label className="field-group" htmlFor="mysql_host">
+                  <span className="field-label">Host</span>
+                  <input
+                    id="mysql_host"
+                    name="mysql_host"
+                    className="input-control"
+                    value={dbForm.mysql_host}
+                    onChange={handleChange}
+                  />
+                </label>
+                <label className="field-group" htmlFor="mysql_port">
+                  <span className="field-label">Port</span>
+                  <input
+                    id="mysql_port"
+                    name="mysql_port"
+                    className="input-control"
+                    value={dbForm.mysql_port}
+                    onChange={handleChange}
+                  />
+                </label>
+                <label className="field-group" htmlFor="mysql_user">
+                  <span className="field-label">User</span>
+                  <input
+                    id="mysql_user"
+                    name="mysql_user"
+                    className="input-control"
+                    value={dbForm.mysql_user}
+                    onChange={handleChange}
+                  />
+                </label>
+                <label className="field-group" htmlFor="mysql_password">
+                  <span className="field-label">Password</span>
+                  <input
+                    id="mysql_password"
+                    name="mysql_password"
+                    type="password"
+                    className="input-control"
+                    value={dbForm.mysql_password}
+                    onChange={handleChange}
+                  />
+                </label>
+                <label className="field-group" htmlFor="mysql_database">
+                  <span className="field-label">Database</span>
+                  <input
+                    id="mysql_database"
+                    name="mysql_database"
+                    className="input-control"
+                    value={dbForm.mysql_database}
+                    onChange={handleChange}
+                  />
+                </label>
+              </div>
+            )}
+
+            <div className="settings-card-actions">
+              <button type="button" className="btn-primary" onClick={handleSaveConfig}>
+                Save configuration
+              </button>
+              <button type="button" className="btn-secondary" onClick={handleInit}>
+                Initialise tables
+              </button>
+            </div>
+
+            {dbFeedback && (
+              <p className={`feedback-inline ${dbFeedback.type}`}>{dbFeedback.message}</p>
+            )}
+          </section>
+
+          <section className="settings-card">
+            <div className="settings-card-header">
+              <h2 className="settings-card-title">Seed dataset</h2>
+              <p className="settings-card-subtitle">
+                Populate dimensions, themes, and guidance from the enhanced spreadsheet.
+              </p>
+            </div>
+
+            <label className="field-group" htmlFor="excel_path">
+              <span className="field-label">Spreadsheet path</span>
+              <input
+                id="excel_path"
+                className="input-control"
+                value={excelPath}
+                onChange={(event) => setExcelPath(event.target.value)}
+              />
+              <span className="field-hint">Defaults to the enhanced operational resilience workbook.</span>
+            </label>
+
+            <div className="settings-card-actions">
+              <button type="button" className="btn-primary" onClick={handleSeed}>
+                Seed from Excel
+              </button>
+              <button type="button" className="btn-secondary" onClick={refreshSessions}>
+                Refresh sessions
+              </button>
+            </div>
+
+            {seedFeedback && (
+              <p className={`feedback-inline ${seedFeedback.type}`}>{seedFeedback.message}</p>
+            )}
+
+            {seedDetails && <pre className="seed-log">{seedDetails}</pre>}
+          </section>
+        </div>
+
+        <div className="settings-column">
+          <section className="settings-card">
+            <div className="settings-card-header">
+              <h2 className="settings-card-title">Sessions</h2>
+              <p className="settings-card-subtitle">
+                Create new assessment sessions or blend existing ones into a combined master.
+              </p>
+            </div>
+
+            <div className="form-grid two-column">
+              <form className="field-group" onSubmit={handleCreateSession}>
+                <span className="field-label">Create session</span>
+                <input
+                  className="input-control"
+                  placeholder="Session name"
+                  value={newSession.name}
+                  onChange={(event) => setNewSession((prev) => ({ ...prev, name: event.target.value }))}
+                />
+                <input
+                  className="input-control"
+                  placeholder="Assessor (optional)"
+                  value={newSession.assessor}
+                  onChange={(event) => setNewSession((prev) => ({ ...prev, assessor: event.target.value }))}
+                />
+                <input
+                  className="input-control"
+                  placeholder="Organization (optional)"
+                  value={newSession.organization}
+                  onChange={(event) => setNewSession((prev) => ({ ...prev, organization: event.target.value }))}
+                />
+                <input
+                  className="input-control"
+                  placeholder="Notes (optional)"
+                  value={newSession.notes}
+                  onChange={(event) => setNewSession((prev) => ({ ...prev, notes: event.target.value }))}
+                />
+                <button type="submit" className="btn-primary">
+                  Create session
+                </button>
+              </form>
+
+              <div className="field-group">
+                <span className="field-label">Combine sessions</span>
+                <span className="field-hint">Hold Ctrl/Cmd to choose multiple source sessions.</span>
+                <select
+                  id="combine_select"
+                  className="input-control session-multi"
+                  multiple
+                  value={combineSelection}
+                  onChange={(event) => {
+                    const values = Array.from(event.target.selectedOptions).map((option) => option.value);
+                    setCombineSelection(values);
+                  }}
+                >
+                  {sortedSessions.map((session) => (
+                    <option key={session.id} value={String(session.id)}>
+                      #{session.id} · {session.name}
+                    </option>
+                  ))}
+                </select>
+                <input
+                  className="input-control"
+                  value={combineName}
+                  onChange={(event) => setCombineName(event.target.value)}
+                  placeholder="Master session name"
+                />
+                <button type="button" className="btn-secondary" onClick={handleCombineSessions}>
+                  Combine selected
+                </button>
+              </div>
+            </div>
+
+            {sessionFeedback && (
+              <p className={`feedback-inline ${sessionFeedback.type}`}>{sessionFeedback.message}</p>
+            )}
+          </section>
+
+          <section className="settings-card">
+            <div className="settings-card-header">
+              <h2 className="settings-card-title">Coming soon</h2>
+              <p className="settings-card-subtitle">
+                Planned controls that build on the refreshed design language for the Settings hub.
+              </p>
+            </div>
+
+            <div className="feature-list">
+              <div className="feature-item">
+                <span className="feature-icon">D</span>
+                <div className="feature-copy">
+                  <span className="feature-title">Data export history</span>
+                  <span className="feature-description">
+                    Access downloadable archives of previous exports with timestamps and owners.
+                  </span>
+                </div>
+              </div>
+              <div className="feature-item">
+                <span className="feature-icon">T</span>
+                <div className="feature-copy">
+                  <span className="feature-title">Brand &amp; theming controls</span>
+                  <span className="feature-description">
+                    Upload custom logos, adjust the colour tokens, and preview changes instantly.
+                  </span>
+                </div>
+              </div>
+              <div className="feature-item">
+                <span className="feature-icon">S</span>
+                <div className="feature-copy">
+                  <span className="feature-title">System health</span>
+                  <span className="feature-description">
+                    Highlight the latest migration, pending actions, and actionable resilience alerts.
+                  </span>
+                </div>
+              </div>
+            </div>
+          </section>
+        </div>
+      </div>
     </div>
   );
 }

@@ -179,14 +179,13 @@ Perform these steps whenever you want a quick end-to-end verification:
 
 ### Customising imagery
 
-- Dimension card images live in `app/web/static/images/dimensions/`. Replace the
-  existing `.png` files (e.g. `governance-leadership.png`) with your own artwork
-  and rerun `npm run build` (or `poetry run server`, which triggers a build if
-  required).
-- Theme cards look for assets in
-  `app/web/static/images/themes/<dimension>/<theme>.png` (slugified names). If no
-  theme-specific file is present, the UI falls back to the parent dimension
-  image.
+- **Golden source** – Runtime card art is served from
+  `app/web/static/images/dimensions/` and
+  `app/web/static/images/themes/<dimension>/<theme>.png`. Replace those `.png`
+  files (e.g. `governance-leadership.png`) with your own artwork and rerun
+  `npm run build` (or `poetry run server`, which triggers a build if required).
+- Theme cards fall back to their parent dimension image when a
+  `themes/<dimension>/<theme>.png` variant is not provided.
 - Colour tokens (CSS variables beginning with `--color-`) live near the top of
   `frontend/src/index.css`. Adjust these to personalise the palette and typography.
 
