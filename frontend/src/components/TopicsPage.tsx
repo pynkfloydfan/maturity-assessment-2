@@ -3,9 +3,18 @@ import { useParams } from "react-router-dom";
 import { useThemeTopics } from "../hooks/useThemeTopics";
 import { useSessionContext } from "../context/SessionContext";
 import { useDimensions } from "../hooks/useDimensions";
+import { useThemes } from "../hooks/useThemes";
 import { apiPost } from "../api/client";
 import { usePageBreadcrumb } from "../context/BreadcrumbContext";
 import type { RatingScaleItem, RatingUpdatePayload, TopicDetail } from "../api/types";
+
+const CMMI_LEVEL_LABELS: Record<number, string> = {
+  1: "Initial",
+  2: "Managed",
+  3: "Defined",
+  4: "Quantitatively Managed",
+  5: "Optimizing",
+};
 
 type TopicSnapshot = Pick<RatingUpdatePayload, "rating_level" | "is_na" | "comment">;
 
@@ -19,6 +28,7 @@ export default function TopicsPage() {
     themeId: Number.isNaN(themeId) ? null : themeId,
     sessionId: activeSessionId,
   });
+  const { themes: dimensionThemes } = useThemes(Number.isNaN(dimensionId) ? null : dimensionId);
 
   const [initialState, setInitialState] = useState<Record<number, TopicSnapshot>>({});
   const [topicState, setTopicState] = useState<Record<number, TopicSnapshot>>({});
@@ -176,6 +186,21 @@ export default function TopicsPage() {
   const coverageDisplay = loading || ratingMetrics.total === 0 ? "–" : `${ratingMetrics.coverage}%`;
   const averageDisplay = loading || ratingMetrics.average == null ? "–" : ratingMetrics.average.toFixed(1);
 
+  const themeDescription = useMemo(() => {
+    if (!theme) {
+      return null;
+    }
+    const primary = theme.description?.trim();
+    if (primary) {
+      return primary;
+    }
+    const fallback = dimensionThemes.find((item) => item.id === theme.id)?.description?.trim();
+    return fallback ?? null;
+  }, [theme, dimensionThemes]);
+
+  const heroDescription =
+    themeDescription ?? "Assess supporting topics for this theme and capture structured ratings.";
+
   return (
     <div className="page-section">
       {theme && (
@@ -183,7 +208,7 @@ export default function TopicsPage() {
           <div className="pill">{dimension ? dimension.name : "Theme"}</div>
           <div>
             <h1>{theme.name}</h1>
-            <p>{theme.description ?? "Assess supporting topics for this theme and capture structured ratings."}</p>
+            <p>{heroDescription}</p>
           </div>
           <div className="status-card">
             <div className="status-item">
@@ -218,59 +243,71 @@ export default function TopicsPage() {
           </div>
         </div>
       )}
-      {data?.generic_guidance?.length ? (
-        <aside className="rounded-xl border border-[#dfe4ed] bg-white p-4 text-sm text-[#4d5c6e] shadow-sm">
-          <h2 className="mb-2 text-base font-semibold text-[#121417]">Theme-level guidance</h2>
-          <ul className="flex flex-wrap gap-3">
-            {data.generic_guidance.map((item) => (
-              <li key={item.level} className="rounded-lg border border-[#e5e8eb] bg-[#f9fbfd] px-3 py-2">
-                <span className="block text-xs font-medium uppercase tracking-wide text-[#61758a]">
-                  Level {item.level}
-                </span>
-                <span className="text-sm text-[#4d5c6e]">{item.description}</span>
-              </li>
-            ))}
-          </ul>
-        </aside>
-      ) : null}
-      <div className="page-toolbar">
-        <div className="page-toolbar__summary">
-          Session #{activeSessionId} · {topicCount} topics
+      <div className={`topic-layout${data?.generic_guidance?.length ? "" : " topic-layout--single"}`}>
+        <div className="topic-main">
+          <div className="page-toolbar">
+            <div className="page-toolbar__summary">
+              Session #{activeSessionId} · {topicCount} topics
+            </div>
+            <div className="page-toolbar__actions">
+              {saveError && <span className="text-sm text-red-600">{saveError}</span>}
+              {saveMessage && <span className="text-sm text-green-600">{saveMessage}</span>}
+            </div>
+          </div>
+
+          {loading && <div className="text-sm text-[#61758a]">Loading topics…</div>}
+          {error && <div className="text-sm text-red-600">{error}</div>}
+          {!loading && !error && data && data.topics.length === 0 && (
+            <div className="rounded-lg border border-dashed border-[#d0d7e3] bg-white p-8 text-center text-[#61758a]">
+              No topics were found for this theme.
+            </div>
+          )}
+          {!loading && !error && data && data.topics.length > 0 && (
+            <section className="flex flex-col gap-4">
+              {data.topics.map((topic) => {
+                const current = topicState[topic.id] ?? initialState[topic.id] ?? {
+                  rating_level: topic.is_na ? null : topic.rating_level ?? null,
+                  is_na: topic.is_na,
+                  comment: topic.comment ?? "",
+                };
+                const dirty = isTopicDirty(topic.id);
+                return (
+                  <TopicAssessmentCard
+                    key={topic.id}
+                    topic={topic}
+                    ratingScale={data.rating_scale}
+                    state={current}
+                    updateState={updateTopicState}
+                    dirty={dirty}
+                  />
+                );
+              })}
+            </section>
+          )}
         </div>
-        <div className="page-toolbar__actions">
-          {saveError && <span className="text-sm text-red-600">{saveError}</span>}
-          {saveMessage && <span className="text-sm text-green-600">{saveMessage}</span>}
-        </div>
+
+        {data?.generic_guidance?.length ? (
+          <aside className="topic-sidebar">
+            <div className="topic-sidebar__card">
+              <h2 className="topic-sidebar__title">Theme-level guidance</h2>
+              <ul className="topic-sidebar__list">
+                {data.generic_guidance.map((item) => {
+                  const levelLabel = CMMI_LEVEL_LABELS[item.level];
+                  const heading = levelLabel
+                    ? `Level ${item.level} - ${levelLabel}`
+                    : `Level ${item.level}`;
+                  return (
+                    <li key={item.level} className="topic-sidebar__item">
+                      <span className="topic-sidebar__level">{heading}</span>
+                      <span className="topic-sidebar__copy">{item.description}</span>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          </aside>
+        ) : null}
       </div>
-      {loading && <div className="text-sm text-[#61758a]">Loading topics…</div>}
-      {error && <div className="text-sm text-red-600">{error}</div>}
-      {!loading && !error && data && data.topics.length === 0 && (
-        <div className="rounded-lg border border-dashed border-[#d0d7e3] bg-white p-8 text-center text-[#61758a]">
-          No topics were found for this theme.
-        </div>
-      )}
-      {!loading && !error && data && data.topics.length > 0 && (
-        <section className="flex flex-col gap-4">
-          {data.topics.map((topic) => {
-            const current = topicState[topic.id] ?? initialState[topic.id] ?? {
-              rating_level: topic.is_na ? null : topic.rating_level ?? null,
-              is_na: topic.is_na,
-              comment: topic.comment ?? "",
-            };
-            const dirty = isTopicDirty(topic.id);
-            return (
-              <TopicAssessmentCard
-                key={topic.id}
-                topic={topic}
-                ratingScale={data.rating_scale}
-                state={current}
-                updateState={updateTopicState}
-                dirty={dirty}
-              />
-            );
-          })}
-        </section>
-      )}
     </div>
   );
 }
