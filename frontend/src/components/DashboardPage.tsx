@@ -1,7 +1,7 @@
 import createPlotlyComponent from "react-plotly.js/factory";
 import Plotly from "plotly.js-dist-min";
-import Breadcrumb from "./shared/Breadcrumb";
 import { useSessionContext } from "../context/SessionContext";
+import { usePageBreadcrumb } from "../context/BreadcrumbContext";
 import { getDimensionTiles, getRadarFigure, useDashboard } from "../hooks/useDashboard";
 import type { DashboardTile } from "../api/types";
 
@@ -37,6 +37,7 @@ export default function DashboardPage() {
   const { data, figures, loading, error } = useDashboard(activeSessionId);
   const tiles = getDimensionTiles(figures);
   const radar = getRadarFigure(figures);
+  usePageBreadcrumb(null);
 
   if (!activeSessionId) {
     return (
@@ -51,7 +52,6 @@ export default function DashboardPage() {
 
   return (
     <div className="mx-auto flex max-w-6xl flex-col gap-6 px-6 py-10">
-      <Breadcrumb items={[{ label: "Dashboard" }]} />
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-semibold text-[#121417]">Dashboard</h1>

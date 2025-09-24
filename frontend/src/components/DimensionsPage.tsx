@@ -1,5 +1,6 @@
+import { useMemo } from "react";
 import { Link } from "react-router-dom";
-import Breadcrumb from "./shared/Breadcrumb";
+import { usePageBreadcrumb } from "../context/BreadcrumbContext";
 import { useDimensions } from "../hooks/useDimensions";
 
 const DIMENSION_SLUGS: Record<string, string> = {
@@ -80,9 +81,11 @@ export default function DimensionsPage() {
   const dimensionCount = dimensions.length;
   const themeCount = dimensions.reduce((acc, item) => acc + (item.theme_count ?? 0), 0);
 
+  const breadcrumbItems = useMemo(() => [{ label: "Dimensions" }], []);
+  usePageBreadcrumb(breadcrumbItems);
+
   return (
     <div className="page-section">
-      <Breadcrumb items={[{ label: "Dimensions" }]} />
       <div className="page-hero">
         <div className="pill">Dimension Library</div>
         <div>

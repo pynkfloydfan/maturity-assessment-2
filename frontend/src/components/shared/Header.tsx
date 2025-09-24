@@ -1,7 +1,9 @@
 import { ChangeEvent, useMemo } from "react";
 import { Link, NavLink } from "react-router-dom";
 import avatarImage from "../../assets/user-avatar.png";
+import Breadcrumb from "./Breadcrumb";
 import { useSessionContext } from "../../context/SessionContext";
+import { useBreadcrumbContext } from "../../context/BreadcrumbContext";
 
 function HeaderIcon() {
   return (
@@ -13,6 +15,7 @@ function HeaderIcon() {
 
 export default function Header() {
   const { sessions, activeSessionId, selectSession, loading, error } = useSessionContext();
+  const { items: breadcrumbItems } = useBreadcrumbContext();
 
   const navLinks = useMemo(
     () => [
@@ -86,6 +89,11 @@ export default function Header() {
       </div>
 
       <div className="header-sub">
+        {breadcrumbItems.length > 0 && (
+          <div className="app-container header-breadcrumb">
+            <Breadcrumb items={breadcrumbItems} />
+          </div>
+        )}
         <div className="app-container header-metrics">
           <div className="metric-chip">
             <div className="metric-label">Active session</div>

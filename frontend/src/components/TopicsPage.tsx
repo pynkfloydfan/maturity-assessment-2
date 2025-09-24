@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useMemo, useState, type ChangeEvent } from "react";
 import { useParams } from "react-router-dom";
-import Breadcrumb from "./shared/Breadcrumb";
 import { useThemeTopics } from "../hooks/useThemeTopics";
 import { useSessionContext } from "../context/SessionContext";
 import { useDimensions } from "../hooks/useDimensions";
 import { apiPost } from "../api/client";
+import { usePageBreadcrumb } from "../context/BreadcrumbContext";
 import type { RatingScaleItem, RatingUpdatePayload, TopicDetail } from "../api/types";
 
 type TopicSnapshot = Pick<RatingUpdatePayload, "rating_level" | "is_na" | "comment">;
@@ -13,7 +13,7 @@ export default function TopicsPage() {
   const params = useParams<{ dimensionId: string; themeId: string }>();
   const dimensionId = params.dimensionId ? Number.parseInt(params.dimensionId, 10) : NaN;
   const themeId = params.themeId ? Number.parseInt(params.themeId, 10) : NaN;
-  const { activeSessionId, sessions } = useSessionContext();
+  const { activeSessionId } = useSessionContext();
   const { dimensions } = useDimensions();
   const { data, loading, error, refresh } = useThemeTopics({
     themeId: Number.isNaN(themeId) ? null : themeId,
@@ -116,6 +116,20 @@ export default function TopicsPage() {
     }
   }, [activeSessionId, data, isTopicDirty, topicState, refresh]);
 
+  const dimension = dimensions.find((item) => item.id === dimensionId);
+  const theme = data?.theme;
+  const breadcrumbItems = useMemo(() => {
+    const trail: { label: string; path?: string }[] = [{ label: "Dimensions", path: "/" }];
+    if (dimension) {
+      trail.push({ label: dimension.name, path: `/dimensions/${dimension.id}/themes` });
+    }
+    if (theme) {
+      trail.push({ label: theme.name });
+    }
+    return trail;
+  }, [dimension, theme]);
+  usePageBreadcrumb(breadcrumbItems);
+
   if (!dimensionId || Number.isNaN(dimensionId) || !themeId || Number.isNaN(themeId)) {
     return (
       <div className="mx-auto max-w-4xl px-6 py-10 text-[#61758a]">
@@ -137,48 +151,69 @@ export default function TopicsPage() {
     );
   }
 
-  const dimension = dimensions.find((item) => item.id === dimensionId);
-  const theme = data?.theme;
-  const breadcrumbItems = [
-    { label: "Dimensions", path: "/" },
-    dimension ? { label: dimension.name, path: `/dimensions/${dimension.id}/themes` } : undefined,
-    theme ? { label: theme.name } : undefined,
-  ].filter(Boolean) as { label: string; path?: string }[];
-
   const topicCount = data?.topics.length ?? 0;
-  const activeSession = sessions.find((session) => session.id === activeSessionId);
   const statusText = saving ? "Saving…" : hasChanges ? "Unsaved changes" : "Up to date";
+  const ratingMetrics = useMemo(() => {
+    if (!data || !data.topics.length) {
+      return { total: data?.topics.length ?? 0, rated: 0, coverage: 0, average: null as number | null };
+    }
+    let rated = 0;
+    let sum = 0;
+    data.topics.forEach((topic) => {
+      if (topic.is_na) {
+        return;
+      }
+      if (topic.rating_level == null) {
+        return;
+      }
+      rated += 1;
+      sum += topic.rating_level;
+    });
+    const coverage = data.topics.length ? Math.round((rated / data.topics.length) * 100) : 0;
+    const average = rated ? sum / rated : null;
+    return { total: data.topics.length, rated, coverage, average };
+  }, [data]);
+  const coverageDisplay = loading || ratingMetrics.total === 0 ? "–" : `${ratingMetrics.coverage}%`;
+  const averageDisplay = loading || ratingMetrics.average == null ? "–" : ratingMetrics.average.toFixed(1);
 
   return (
     <div className="page-section">
-      <Breadcrumb items={breadcrumbItems} />
       {theme && (
         <div className="page-hero">
           <div className="pill">{dimension ? dimension.name : "Theme"}</div>
           <div>
             <h1>{theme.name}</h1>
-            {theme.description ? (
-              <p>{theme.description}</p>
-            ) : (
-              <p>Assess supporting topics for this theme and capture structured ratings.</p>
-            )}
+            <p>{theme.description ?? "Assess supporting topics for this theme and capture structured ratings."}</p>
           </div>
           <div className="status-card">
             <div className="status-item">
               <div className="status-label">Topics</div>
               <div className="status-value">{loading ? "–" : topicCount}</div>
             </div>
-            <div className="status-item">
-              <div className="status-label">Active session</div>
-              <div className="status-value">
-                {activeSession
-                  ? `#${activeSession.id}` + (activeSession.name ? ` · ${activeSession.name}` : "")
-                  : `#${activeSessionId}`}
+            <div className="status-item status-item--metrics">
+              <div>
+                <div className="status-label">Coverage &amp; Score</div>
+                <div className="status-value">{coverageDisplay} · {averageDisplay}</div>
+                <div className="status-note">Coverage · Avg score</div>
               </div>
             </div>
-            <div className="status-item">
-              <div className="status-label">Status</div>
-              <div className="status-value">{statusText}</div>
+            <div className="status-item status-item--actions">
+              <div>
+                <div className="status-label">Status</div>
+                <div
+                  className={`status-value${hasChanges && !saving ? " status-value--dirty" : ""}`}
+                >
+                  {statusText}
+                </div>
+              </div>
+              <button
+                type="button"
+                className={`${hasChanges && !saving ? "btn-primary" : "btn-secondary"} status-action`}
+                onClick={handleSave}
+                disabled={!hasChanges || saving}
+              >
+                {saving ? "Saving…" : "Save changes"}
+              </button>
             </div>
           </div>
         </div>
@@ -205,14 +240,6 @@ export default function TopicsPage() {
         <div className="page-toolbar__actions">
           {saveError && <span className="text-sm text-red-600">{saveError}</span>}
           {saveMessage && <span className="text-sm text-green-600">{saveMessage}</span>}
-          <button
-            type="button"
-            className="rounded-md bg-[#0d80f2] px-4 py-2 text-sm font-medium text-white shadow disabled:cursor-not-allowed disabled:bg-[#a9c7ec]"
-            onClick={handleSave}
-            disabled={!hasChanges || saving}
-          >
-            {saving ? "Saving…" : "Save changes"}
-          </button>
         </div>
       </div>
       {loading && <div className="text-sm text-[#61758a]">Loading topics…</div>}

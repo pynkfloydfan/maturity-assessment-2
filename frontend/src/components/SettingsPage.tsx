@@ -1,5 +1,4 @@
 import { ChangeEvent, FormEvent, useEffect, useMemo, useState } from "react";
-import Breadcrumb from "./shared/Breadcrumb";
 import { apiGet, apiPost, apiPut } from "../api/client";
 import type {
   DatabaseBackend,
@@ -11,6 +10,7 @@ import type {
   SessionListItem,
 } from "../api/types";
 import { useSessionContext } from "../context/SessionContext";
+import { usePageBreadcrumb } from "../context/BreadcrumbContext";
 
 const DEFAULT_SQLITE_PATH = "./resilience.db";
 const DEFAULT_EXCEL_PATH = "app/source_data/enhanced_operational_resilience_maturity_v6.xlsx";
@@ -75,6 +75,7 @@ function mergeSettingsIntoForm(form: DatabaseFormState, settings: DatabaseSettin
 
 export default function SettingsPage() {
   const { sessions, refreshSessions } = useSessionContext();
+  usePageBreadcrumb(null);
   const [dbForm, setDbForm] = useState<DatabaseFormState>(INITIAL_DB_FORM);
   const [excelPath, setExcelPath] = useState<string>(DEFAULT_EXCEL_PATH);
   const [dbFeedback, setDbFeedback] = useState<Feedback>(null);
@@ -203,8 +204,6 @@ export default function SettingsPage() {
 
   return (
     <div className="page-section">
-      <Breadcrumb items={[{ label: "Settings" }]} />
-
       <div className="page-hero">
         <div className="pill">Workspace Controls</div>
         <div>

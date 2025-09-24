@@ -1,5 +1,6 @@
+import { useMemo } from "react";
 import { Link, useParams } from "react-router-dom";
-import Breadcrumb from "./shared/Breadcrumb";
+import { usePageBreadcrumb } from "../context/BreadcrumbContext";
 import { useDimensions } from "../hooks/useDimensions";
 import { useThemes } from "../hooks/useThemes";
 
@@ -81,6 +82,13 @@ export default function ThemesPage() {
 
   const dimension = dimensions.find((item) => item.id === dimensionId);
 
+  const breadcrumbItems = useMemo(() => {
+    return [{ label: "Dimensions", path: "/" }, dimension ? { label: dimension.name } : null].filter(
+      Boolean,
+    ) as { label: string; path?: string }[];
+  }, [dimension]);
+  usePageBreadcrumb(breadcrumbItems);
+
   if (!dimensionId || Number.isNaN(dimensionId)) {
     return <div className="info-banner error">Invalid dimension identifier provided.</div>;
   }
@@ -97,18 +105,13 @@ export default function ThemesPage() {
     );
   }
 
-  const breadcrumbItems = [
-    { label: "Dimensions", path: "/" },
-    { label: dimension.name },
-  ];
-
   return (
     <div className="page-section">
-      <Breadcrumb items={breadcrumbItems} />
       <div className="page-hero">
         <div className="pill">{dimension.name}</div>
         <div>
-          <h1>Navigate themes &amp; prioritise focus areas</h1>
+          <h1>{dimension.name}</h1>
+          {dimension.description && <p>{dimension.description}</p>}
           <p>
             Each theme explores a focused capability within {dimension.name}. Choose a tile to review
             descriptive guidance and capture topic-level ratings with confidence.
