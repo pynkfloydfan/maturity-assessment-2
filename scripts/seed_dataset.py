@@ -279,15 +279,28 @@ def main() -> None:
     parser = argparse.ArgumentParser(
         description="Seed DB from Enhanced Operational Resilience Maturity workbook"
     )
-    parser.add_argument(
-        "--backend", choices=["sqlite", "mysql"], default=os.environ.get("DB_BACKEND", "sqlite")
+
+    backend_default = os.environ.get("DB_BACKEND", "sqlite")
+    sqlite_default = os.environ.get("DB_SQLITE_PATH") or os.environ.get("SQLITE_PATH", "./resilience.db")
+    mysql_host_default = os.environ.get("DB_MYSQL_HOST") or os.environ.get("MYSQL_HOST", "localhost")
+    mysql_port_default = int(
+        os.environ.get("DB_MYSQL_PORT")
+        or os.environ.get("MYSQL_PORT")
+        or 3306
     )
-    parser.add_argument("--sqlite-path", default=os.environ.get("SQLITE_PATH", "./resilience.db"))
-    parser.add_argument("--mysql-host", default=os.environ.get("MYSQL_HOST", "localhost"))
-    parser.add_argument("--mysql-port", type=int, default=int(os.environ.get("MYSQL_PORT", 3306)))
-    parser.add_argument("--mysql-user", default=os.environ.get("MYSQL_USER", "root"))
-    parser.add_argument("--mysql-password", default=os.environ.get("MYSQL_PASSWORD", ""))
-    parser.add_argument("--mysql-db", default=os.environ.get("MYSQL_DB", "resilience"))
+    mysql_user_default = os.environ.get("DB_MYSQL_USER") or os.environ.get("MYSQL_USER", "root")
+    mysql_password_default = os.environ.get("DB_MYSQL_PASSWORD") or os.environ.get("MYSQL_PASSWORD", "")
+    mysql_database_default = os.environ.get("DB_MYSQL_DATABASE") or os.environ.get("MYSQL_DB", "resilience")
+
+    parser.add_argument(
+        "--backend", choices=["sqlite", "mysql"], default=backend_default
+    )
+    parser.add_argument("--sqlite-path", default=sqlite_default)
+    parser.add_argument("--mysql-host", default=mysql_host_default)
+    parser.add_argument("--mysql-port", type=int, default=mysql_port_default)
+    parser.add_argument("--mysql-user", default=mysql_user_default)
+    parser.add_argument("--mysql-password", default=mysql_password_default)
+    parser.add_argument("--mysql-database", "--mysql-db", dest="mysql_database", default=mysql_database_default)
     parser.add_argument(
         "--excel-path",
         default="app/source_data/enhanced_operational_resilience_maturity_v6.xlsx",
@@ -301,7 +314,7 @@ def main() -> None:
         mysql_port=args.mysql_port,
         mysql_user=args.mysql_user,
         mysql_password=args.mysql_password,
-        mysql_database=args.mysql_db,
+        mysql_database=args.mysql_database,
     )
     url = cfg.get_connection_url()
     engine, SessionLocal = make_engine_and_session(url)

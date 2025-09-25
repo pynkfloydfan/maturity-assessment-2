@@ -28,7 +28,7 @@ scripts/run_server.py  # helper to build frontend & launch FastAPI
 scripts/seed_dataset.py
 ```
 
-Legacy Streamlit code is being retired (see `deprecated/` once Step 10 lands).
+The legacy Streamlit prototype has been removed; FastAPI + React is now the canonical flow.
 
 ## Quick start
 
@@ -44,6 +44,17 @@ poetry run python -V
 Database settings live in `app/infrastructure/config.py` and default to a local
 SQLite file (`./resilience.db`). To override (e.g., MySQL), set the relevant
 environment variables or update your `.env` / config as needed.
+
+#### Database environment variables
+
+`DatabaseConfig` reads settings from environment variables prefixed with `DB_`. Configure:
+
+- `DB_BACKEND` — `sqlite` (default) or `mysql`
+- `DB_SQLITE_PATH` — path to the SQLite database file (when `DB_BACKEND=sqlite`)
+- `DB_MYSQL_HOST`, `DB_MYSQL_PORT`, `DB_MYSQL_USER`, `DB_MYSQL_PASSWORD`, `DB_MYSQL_DATABASE` — connection details for MySQL (when `DB_BACKEND=mysql`)
+- Optional: `DB_MYSQL_CHARSET` (defaults to `utf8mb4`), `DB_POOL_PRE_PING`, `DB_POOL_RECYCLE`, `DB_ECHO`
+
+`.env.example` includes these keys, and the FastAPI UI under **Settings → Database** writes the same values into the running app state. The CLI seeding script also honours legacy `MYSQL_*` variables for backward compatibility.
 
 ### 3. Seed the database from the enhanced spreadsheet (optional for dev)
 
@@ -63,7 +74,7 @@ poetry run seed-database \
   --mysql-port 3306 \
   --mysql-user resilience_user \
   --mysql-password '***' \
-  --mysql-db resilience \
+  --mysql-database resilience \
   --excel-path app/source_data/enhanced_operational_resilience_maturity_v6.xlsx
 ```
 
@@ -150,11 +161,6 @@ poetry run alembic upgrade head      # recreate tables with the latest schema
 
 Then reseed via the Settings page (or re-run `scripts/seed_dataset.py`).
 
-## Legacy Streamlit UI
-
-The previous Streamlit interface lives in `deprecated/streamlit/` for reference
-during the transition. It can be safely deleted once the FastAPI/React flow is
-fully adopted.
 
 ## Tests
 

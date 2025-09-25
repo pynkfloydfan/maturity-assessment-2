@@ -28,8 +28,8 @@ def seed_database_from_excel(cfg: DBConfig, excel_path: Path) -> tuple[int, str,
             cfg.mysql_user or "root",
             "--mysql-password",
             cfg.mysql_password or "",
-            "--mysql-db",
-            cfg.mysql_db or "resilience",
+            "--mysql-database",
+            cfg.mysql_database or "resilience",
         ]
     cmd += ["--excel-path", str(excel_path)]
     res = subprocess.run(cmd, capture_output=True, text=True)

@@ -134,11 +134,6 @@ def setup_logging(
                 "handlers": [],
                 "propagate": False,
             },
-            "streamlit": {
-                "level": "WARNING",  # Reduce Streamlit noise
-                "handlers": [],
-                "propagate": False,
-            },
         },
         "root": {"level": level, "handlers": []},
     }

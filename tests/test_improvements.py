@@ -425,7 +425,6 @@ class TestIntegration:
         assert settings.database is not None
         assert settings.logging is not None
         assert settings.security is not None
-        assert settings.streamlit is not None
 
         # Test environment info
         env_info = settings.get_environment_info()

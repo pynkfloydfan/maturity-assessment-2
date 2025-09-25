@@ -1,7 +1,7 @@
 [tool.poetry]
 name = "resilience-assessment-app"
 version = "0.1.0"
-description = "Interactive operational resilience maturity assessment (CMMI 1–5) with Streamlit, SQLAlchemy, and optional SQLite/MySQL backends."
+description = "Operational resilience maturity assessment platform with FastAPI backend, React frontend, and SQLite/MySQL database options."
 authors = ["Your Name <you@example.com>"]
 readme = "README.md"
 packages = [{include = "app"}]
@@ -9,14 +9,12 @@ license = "MIT"
 
 [tool.poetry.dependencies]
 python = ">=3.10"
-streamlit = "^1.37.0"
 pandas = "^2.2.2"
 numpy = "^1.26.4"
 SQLAlchemy = "^2.0.31"
 alembic = "^1.13.2"
 plotly = "^5.23.0"
 openpyxl = "^3.1.5"
-python-dotenv = "^1.0.1"
 pydantic = "^2.8.2"
 pydantic-settings = "^2.0.0"
 # For MySQL5.6 compatibility use PyMySQL (pure Python) to avoid system deps of mysqlclient
@@ -65,9 +63,7 @@ combine-as-imports = true
 # These files legitimately have long lines or non-top imports:
 [tool.ruff.lint.per-file-ignores]
 "alembic/**/*.py" = ["E501"]             # migrations often have long lines
-"deprecated/streamlit/ui/styles.py" = ["E501"]            # CSS in triple-quoted strings
 "app/infrastructure/models.py" = ["E501"]# long SQL/constraints
-"streamlit_app.py" = ["E402"]            # we configure logging before imports by design
 
 [tool.mypy]
 python_version = "3.13"
@@ -84,8 +80,9 @@ namespace_packages = true
 files = ["app/application", "app/infrastructure", "app/domain"]
 
 
+
 [[tool.mypy.overrides]]
-module = ["streamlit.*", "pytest.*"]
+module = ["pytest.*"]
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
