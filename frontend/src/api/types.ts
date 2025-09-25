@@ -173,3 +173,13 @@ export interface SeedResponse extends DatabaseOperationResponse {
   stdout?: string | null;
   stderr?: string | null;
 }
+
+export interface ImportResponse extends DatabaseOperationResponse {
+  processed: number;
+  errors?: {
+    field?: string;
+    message: string;
+    value?: unknown;
+    details?: Record<string, unknown>;
+  }[] | null;
+}

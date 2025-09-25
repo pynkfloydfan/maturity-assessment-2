@@ -6,6 +6,7 @@ import AssessmentPage from "./components/AssessmentPage";
 import DashboardPage from "./components/DashboardPage";
 import SettingsPage from "./components/SettingsPage";
 import Header from "./components/shared/Header";
+import HelpPage from "./components/HelpPage";
 
 export default function App() {
   return (
@@ -22,7 +23,7 @@ export default function App() {
               <Route path="/assessments" element={<div className="card"><h1 className="settings-heading">Assessments</h1><p className="settings-subcopy">Coming soon...</p></div>} />
               <Route path="/dashboard" element={<DashboardPage />} />
               <Route path="/settings" element={<SettingsPage />} />
-              <Route path="/help" element={<div className="card"><h1 className="settings-heading">Help</h1><p className="settings-subcopy">Coming soon...</p></div>} />
+              <Route path="/help" element={<HelpPage />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           </div>

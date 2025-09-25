@@ -24,7 +24,10 @@ from ..domain.schemas import (
 from ..domain.services import AverageResult, ScoringService
 from ..infrastructure.exceptions import (
     BusinessLogicError,
+    ImportError,
+    MultipleValidationError,
     ResilienceAssessmentError,
+    TopicNotFoundError,
     ValidationError,
     create_user_friendly_error_message,
     log_error_details,
@@ -564,6 +567,146 @@ def export_session_results(session: Session, session_id: int) -> tuple[pd.DataFr
             f"Failed to export results for session {session_id}: {str(e)}", details=error_details
         ) from e
 
+
+@log_operation("import_session_results")
+def import_session_results(
+    session: Session,
+    session_id: int,
+    dataframe: pd.DataFrame,
+) -> int:
+    """Import assessment entries for a session from a DataFrame."""
+
+    try:
+        set_context(operation="import_results", session_id=session_id)
+
+        session_repo = SessionRepo(session)
+        session_repo.get_by_id_required(session_id)
+
+        if dataframe is None or dataframe.empty:
+            logger.info("No rows provided for import; skipping")
+            return 0
+
+        topic_repo = TopicRepo(session)
+        entry_repo = EntryRepo(session)
+
+        records = dataframe.to_dict(orient="records")
+        validation_errors: list[ValidationError] = []
+        processed = 0
+
+        def _is_missing(value: Any) -> bool:
+            if value is None or value is pd.NA:
+                return True
+            if isinstance(value, float) and math.isnan(value):
+                return True
+            if isinstance(value, str) and not value.strip():
+                return True
+            return False
+
+        for index, row in enumerate(records, start=2):
+            topic_id_raw = row.get("TopicID")
+            if _is_missing(topic_id_raw):
+                continue
+
+            try:
+                topic_id = int(topic_id_raw)
+                topic_repo.get_by_id_required(topic_id)
+            except (ValueError, TopicNotFoundError, ValidationError) as exc:
+                validation_errors.append(
+                    ValidationError(
+                        "TopicID",
+                        f"Invalid topic reference at row {index}",
+                        value=topic_id_raw,
+                        details={"row": index, "error": str(exc)},
+                    )
+                )
+                continue
+
+            rating_raw = row.get("Rating")
+            rating_level: int | None
+            if _is_missing(rating_raw):
+                rating_level = None
+            else:
+                try:
+                    rating_level = int(float(rating_raw))
+                except (TypeError, ValueError):
+                    validation_errors.append(
+                        ValidationError(
+                            "Rating",
+                            f"Invalid rating value at row {index}",
+                            value=rating_raw,
+                            details={"row": index},
+                        )
+                    )
+                    continue
+
+            computed_raw = row.get("ComputedScore")
+            if _is_missing(computed_raw):
+                computed_score = None
+            else:
+                try:
+                    computed_score = Decimal(str(computed_raw))
+                except (ValueError, ArithmeticError):
+                    validation_errors.append(
+                        ValidationError(
+                            "ComputedScore",
+                            f"Invalid computed score at row {index}",
+                            value=computed_raw,
+                            details={"row": index},
+                        )
+                    )
+                    continue
+
+            na_raw = row.get("N/A")
+            is_na = False
+            if not _is_missing(na_raw):
+                if isinstance(na_raw, str):
+                    is_na = na_raw.strip().lower() in {"1", "true", "yes", "y"}
+                else:
+                    is_na = bool(na_raw)
+
+            comment_raw = row.get("Comment")
+            comment = None if _is_missing(comment_raw) else str(comment_raw).strip()
+
+            if not any([rating_level is not None, is_na, comment, computed_score is not None]):
+                continue
+
+            try:
+                entry_repo.upsert(
+                    session_id=session_id,
+                    topic_id=topic_id,
+                    rating_level=rating_level,
+                    computed_score=computed_score,
+                    is_na=is_na,
+                    comment=comment,
+                )
+                processed += 1
+            except ValidationError as exc:
+                validation_errors.append(
+                    ValidationError(
+                        exc.field,
+                        f"Row {index}: {exc.message}",
+                        value=exc.value,
+                        details={"row": index, **exc.details},
+                    )
+                )
+
+        if validation_errors:
+            raise MultipleValidationError(validation_errors)
+
+        logger.info("Imported %s entries for session %s", processed, session_id)
+        return processed
+
+    except ResilienceAssessmentError:
+        raise
+    except MultipleValidationError:
+        raise
+    except Exception as e:
+        error_details = log_error_details(e, {"session_id": session_id})
+        logger.error("Failed to import session results", extra=error_details)
+        raise ImportError(
+            f"Failed to import results for session {session_id}: {str(e)}",
+            details=error_details,
+        ) from e
 
 @log_operation("combine_sessions")
 def combine_sessions_to_master(

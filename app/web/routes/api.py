@@ -6,7 +6,8 @@ import logging
 import math
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+import pandas as pd
+from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, File, status
 from fastapi.responses import JSONResponse, StreamingResponse
 from sqlalchemy import func
 from sqlalchemy.engine import Engine
@@ -15,7 +16,11 @@ from sqlalchemy.orm import Session
 from app.application import api as app_api
 from app.infrastructure.config import DatabaseConfig
 from app.infrastructure.db import create_database_engine, create_session_factory
-from app.infrastructure.exceptions import ResilienceAssessmentError, SessionNotFoundError
+from app.infrastructure.exceptions import (
+    MultipleValidationError,
+    ResilienceAssessmentError,
+    SessionNotFoundError,
+)
 from app.infrastructure.models import (
     AssessmentEntryORM,
     DimensionORM,
@@ -42,6 +47,7 @@ from app.web.schemas import (
     RatingUpdate,
     SeedRequest,
     SeedResponse,
+    ImportResponse,
     SessionCombineRequest,
     SessionCreateRequest,
     SessionDetail,
@@ -666,3 +672,78 @@ def export_session_xlsx(session_id: int, db: Session = Depends(get_db_session)) 
         headers=headers,
     )
 
+@router.post("/sessions/{session_id}/imports/xlsx", response_model=ImportResponse)
+async def import_session_xlsx(
+    session_id: int,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db_session),
+) -> ImportResponse:
+    allowed_types = {
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "application/vnd.ms-excel",
+        "application/octet-stream",
+    }
+
+    if file.content_type not in allowed_types:
+        return ImportResponse(
+            status="error",
+            message="Unsupported file type. Please upload an Excel .xlsx file.",
+        )
+
+    file_bytes = await file.read()
+
+    try:
+        dataframe = pd.read_excel(io.BytesIO(file_bytes), sheet_name=0)
+    except Exception as exc:  # pragma: no cover - pandas error detail varies
+        return ImportResponse(
+            status="error",
+            message="Unable to read Excel file. Please verify the template.",
+            details=str(exc),
+        )
+
+    try:
+        processed = app_api.import_session_results(db, session_id=session_id, dataframe=dataframe)
+        db.commit()
+        return ImportResponse(
+            status="ok",
+            message=f"Imported {processed} entries.",
+            processed=processed,
+        )
+    except MultipleValidationError as exc:
+        db.rollback()
+        error_details = [
+            {
+                "field": err.field,
+                "message": err.message,
+                "value": err.value,
+                "details": {
+                    k: (str(v) if not isinstance(v, (int, float, bool)) else v)
+                    for k, v in (getattr(err, "details", {}) or {}).items()
+                },
+            }
+            for err in exc.validation_errors
+        ]
+        return ImportResponse(
+            status="error",
+            message="Import failed due to validation errors.",
+            processed=0,
+            errors=error_details,
+            details=json.dumps(exc.details, default=str),
+        )
+    except ResilienceAssessmentError as exc:
+        db.rollback()
+        return ImportResponse(
+            status="error",
+            message=exc.user_message,
+            processed=0,
+            details=json.dumps(exc.details, default=str),
+        )
+    except Exception as exc:  # pragma: no cover - defensive logging
+        db.rollback()
+        logger.exception("Unexpected error importing assessment", exc_info=exc)
+        return ImportResponse(
+            status="error",
+            message="Unexpected error during import.",
+            processed=0,
+            details=str(exc),
+        )

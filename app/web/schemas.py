@@ -218,3 +218,8 @@ class SeedResponse(DatabaseOperationResponse):
     stdout: Optional[str] = None
     stderr: Optional[str] = None
 
+
+class ImportResponse(DatabaseOperationResponse):
+    processed: int = 0
+    errors: Optional[list[dict[str, object]]] = None
+

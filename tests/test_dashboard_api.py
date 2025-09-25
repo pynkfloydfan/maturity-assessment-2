@@ -146,3 +146,84 @@ def test_seed_from_excel_populates_descriptions(tmp_path):
 
     resp = client.get(f"/api/sessions/{session_id}/dashboard/figures")
     assert resp.status_code == 200
+
+
+def test_export_session_xlsx_single_sheet(tmp_path):
+    client, SessionLocal = build_app_with_db()
+    with SessionLocal() as session:
+        session_id = seed_minimal_dataset(session)
+        session.commit()
+
+    response = client.get(f"/api/sessions/{session_id}/exports/xlsx")
+    assert response.status_code == 200
+
+    export_path = tmp_path / "assessment.xlsx"
+    export_path.write_bytes(response.content)
+
+    xls = pd.ExcelFile(export_path)
+    assert xls.sheet_names == ["Assessment"]
+
+    df = xls.parse("Assessment")
+    for column in ["Dimension", "Theme", "TopicID", "Topic", "Rating", "N/A", "Comment"]:
+        assert column in df.columns
+
+    # Ensure topics are present and aligned with entries
+    assert df["TopicID"].notna().sum() >= 2
+
+
+def test_import_session_xlsx_updates_entries(tmp_path):
+    client, SessionLocal = build_app_with_db()
+    with SessionLocal() as session:
+        session_id = seed_minimal_dataset(session)
+        session.commit()
+        topics = session.query(TopicORM).order_by(TopicORM.id).all()
+
+    upload_df = pd.DataFrame(
+        [
+            {
+                "TopicID": topics[0].id,
+                "Rating": 2,
+                "ComputedScore": None,
+                "N/A": False,
+                "Comment": "Adjusted score",
+            },
+            {
+                "TopicID": topics[1].id,
+                "Rating": 4,
+                "ComputedScore": None,
+                "N/A": False,
+                "Comment": "Progress noted",
+            },
+        ]
+    )
+
+    upload_path = tmp_path / "upload.xlsx"
+    with pd.ExcelWriter(upload_path, engine="xlsxwriter") as writer:
+        upload_df.to_excel(writer, index=False, sheet_name="Assessment")
+
+    with upload_path.open("rb") as fh:
+        response = client.post(
+            f"/api/sessions/{session_id}/imports/xlsx",
+            files={
+                "file": (
+                    "upload.xlsx",
+                    fh.read(),
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                )
+            },
+        )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["status"] == "ok"
+    assert payload["processed"] == 2
+
+    with SessionLocal() as session:
+        entries = (
+            session.query(AssessmentEntryORM)
+            .filter(AssessmentEntryORM.session_id == session_id)
+            .order_by(AssessmentEntryORM.topic_id)
+            .all()
+        )
+        assert [entry.rating_level for entry in entries] == [2, 4]
+        assert [entry.comment for entry in entries] == ["Adjusted score", "Progress noted"]

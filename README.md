@@ -143,7 +143,11 @@ The `/settings` page already exposes the core admin actions:
 - switch between SQLite/MySQL backends;
 - initialise tables via the ORM metadata;
 - seed from the enhanced spreadsheet;
+- upload ratings/comments from a structured Excel workbook (`Assessment` sheet joined on `TopicID`);
 - create or combine assessment sessions.
+
+Grab `/static/templates/assessment_upload_template.xlsx` as a starter workbook; it mirrors the
+download format for quick round-trips.
 
 CLI utilities (`scripts/seed_dataset.py`) remain available for automation or
 headless environments.

@@ -68,6 +68,16 @@ export async function apiPost<T>(path: string, body?: unknown): Promise<T> {
   return handleResponse<T>(response);
 }
 
+export async function apiUpload<T>(path: string, formData: FormData): Promise<T> {
+  const response = await fetch(path, {
+    method: "POST",
+    headers: { Accept: "application/json" },
+    body: formData,
+    credentials: "same-origin",
+  });
+  return handleResponse<T>(response);
+}
+
 export async function apiPut<T>(path: string, body?: unknown): Promise<T> {
   const response = await fetch(path, {
     method: "PUT",

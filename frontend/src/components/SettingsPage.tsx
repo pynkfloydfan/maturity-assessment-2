@@ -1,5 +1,5 @@
-import { ChangeEvent, FormEvent, useEffect, useMemo, useState } from "react";
-import { apiGet, apiPost, apiPut } from "../api/client";
+import { ChangeEvent, FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { apiGet, apiPost, apiPut, apiUpload } from "../api/client";
 import type {
   DatabaseBackend,
   DatabaseInitRequest,
@@ -7,6 +7,7 @@ import type {
   DatabaseSettings,
   SeedRequest,
   SeedResponse,
+  ImportResponse,
   SessionListItem,
 } from "../api/types";
 import { useSessionContext } from "../context/SessionContext";
@@ -90,6 +91,11 @@ export default function SettingsPage() {
     organization: "",
     notes: "",
   });
+  const [uploadFeedback, setUploadFeedback] = useState<Feedback>(null);
+  const [uploadErrors, setUploadErrors] = useState<string[] | null>(null);
+  const [uploadSessionId, setUploadSessionId] = useState<string>("");
+  const [hasUploadFile, setHasUploadFile] = useState<boolean>(false);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     apiGet<DatabaseSettings>("/api/settings/database")
@@ -103,6 +109,12 @@ export default function SettingsPage() {
         setDbFeedback({ type: "error", message: "Failed to load database settings" });
       });
   }, []);
+
+  useEffect(() => {
+    if (sessions.length && !uploadSessionId) {
+      setUploadSessionId(String(sessions[0].id));
+    }
+  }, [sessions, uploadSessionId]);
 
   const handleBackendChange = (event: ChangeEvent<HTMLInputElement>) => {
     const backend = event.target.value as DatabaseBackend;
@@ -195,6 +207,66 @@ export default function SettingsPage() {
       refreshSessions();
     } catch (err) {
       setSessionFeedback({ type: "error", message: err instanceof Error ? err.message : "Failed to combine sessions" });
+    }
+  };
+
+  const handleUploadFileChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0] ?? null;
+    setHasUploadFile(Boolean(file));
+    setUploadFeedback(null);
+    setUploadErrors(null);
+  };
+
+  const handleUploadAssessment = async () => {
+    if (!uploadSessionId) {
+      setUploadFeedback({ type: "error", message: "Select a target session" });
+      return;
+    }
+
+    const file = fileInputRef.current?.files?.[0] ?? null;
+    if (!file) {
+      setUploadFeedback({ type: "error", message: "Choose an Excel file to upload" });
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append("file", file);
+
+    setUploadFeedback(null);
+    setUploadErrors(null);
+
+    try {
+      const result = await apiUpload<ImportResponse>(
+        `/api/sessions/${uploadSessionId}/imports/xlsx`,
+        formData,
+      );
+
+      if (result.status === "ok") {
+        setUploadFeedback({ type: "success", message: result.message });
+        setUploadErrors(null);
+        setHasUploadFile(false);
+        if (fileInputRef.current) {
+          fileInputRef.current.value = "";
+        }
+        refreshSessions();
+      } else {
+        setUploadFeedback({ type: "error", message: result.message });
+        const errors = result.errors?.map((error) => {
+          const field = typeof error.field === "string" ? error.field : "Row";
+          const details =
+            error.details && typeof error.details === "object"
+              ? JSON.stringify(error.details)
+              : undefined;
+          return details ? `${field}: ${error.message} (${details})` : `${field}: ${error.message}`;
+        });
+        setUploadErrors(errors && errors.length ? errors : null);
+      }
+    } catch (err) {
+      setUploadFeedback({
+        type: "error",
+        message: err instanceof Error ? err.message : "Failed to import assessment",
+      });
+      setUploadErrors(null);
     }
   };
 
@@ -377,13 +449,86 @@ export default function SettingsPage() {
               </button>
             </div>
 
-            {seedFeedback && (
-              <p className={`feedback-inline ${seedFeedback.type}`}>{seedFeedback.message}</p>
-            )}
+          {seedFeedback && (
+            <p className={`feedback-inline ${seedFeedback.type}`}>{seedFeedback.message}</p>
+          )}
 
-            {seedDetails && <pre className="seed-log">{seedDetails}</pre>}
-          </section>
-        </div>
+          {seedDetails && <pre className="seed-log">{seedDetails}</pre>}
+        </section>
+
+        <section className="settings-card">
+          <div className="settings-card-header">
+            <h2 className="settings-card-title">Upload assessment</h2>
+            <p className="settings-card-subtitle">
+              Import ratings and comments from an Excel export into an existing session.
+            </p>
+          </div>
+
+          {sessions.length ? (
+            <>
+              <label className="field-group" htmlFor="upload_session">
+                <span className="field-label">Target session</span>
+                <select
+                  id="upload_session"
+                  className="input-control"
+                  value={uploadSessionId}
+                  onChange={(event) => setUploadSessionId(event.target.value)}
+                >
+                  {sortedSessions.map((session) => (
+                    <option key={session.id} value={String(session.id)}>
+                      #{session.id} · {session.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="field-group" htmlFor="upload_file">
+                <span className="field-label">Assessment workbook</span>
+                <input
+                  id="upload_file"
+                  ref={fileInputRef}
+                  className="input-control"
+                  type="file"
+                  accept=".xlsx,.xls"
+                  onChange={handleUploadFileChange}
+                />
+                <span className="field-hint">
+                  Start from the{' '}
+                  <a href="/static/templates/assessment_upload_template.xlsx" download>
+                    assessment upload template
+                  </a>{' '}
+                  to ensure the column layout matches expectations.
+                </span>
+              </label>
+
+              <div className="settings-card-actions">
+                <button
+                  type="button"
+                  className="btn-primary"
+                  onClick={handleUploadAssessment}
+                  disabled={!hasUploadFile}
+                >
+                  Upload assessment
+                </button>
+              </div>
+            </>
+          ) : (
+            <p className="field-hint">Create a session first to enable uploads.</p>
+          )}
+
+          {uploadFeedback && (
+            <p className={`feedback-inline ${uploadFeedback.type}`}>{uploadFeedback.message}</p>
+          )}
+
+          {uploadErrors && (
+            <ul className="upload-error-list">
+              {uploadErrors.map((line, index) => (
+                <li key={index}>{line}</li>
+              ))}
+            </ul>
+          )}
+        </section>
+      </div>
 
         <div className="settings-column">
           <section className="settings-card">

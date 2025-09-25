@@ -568,6 +568,13 @@ body {
   color: var(--color-brand-crimson);
 }
 
+.upload-error-list {
+  margin-top: 10px;
+  padding-left: 18px;
+  font-size: 13px;
+  color: var(--color-brand-crimson);
+}
+
 .seed-log {
   max-height: 260px;
   overflow: auto;
@@ -578,6 +585,116 @@ body {
   font-size: 13px;
   line-height: 1.5;
   color: var(--color-text);
+}
+
+.help-page {
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+  padding-bottom: 24px;
+}
+
+.help-hero {
+  background: linear-gradient(135deg, rgba(0, 103, 160, 0.15), rgba(132, 189, 0, 0.12));
+  border: 1px solid rgba(0, 47, 108, 0.12);
+}
+
+.help-hero h1 {
+  font-size: 36px;
+  margin-bottom: 12px;
+}
+
+.help-toc {
+  margin-top: 18px;
+  background: rgba(255, 255, 255, 0.6);
+  border-radius: var(--radius-md);
+  padding: 18px 24px;
+  border: 1px solid rgba(0, 47, 108, 0.08);
+}
+
+.help-toc__label {
+  font-size: 14px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: rgba(10, 31, 68, 0.65);
+  display: block;
+  margin-bottom: 12px;
+}
+
+.help-toc ol {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 10px;
+  margin: 0;
+  padding-left: 20px;
+}
+
+.help-toc a {
+  color: var(--color-primary-navy);
+  text-decoration: none;
+}
+
+.help-toc a:hover {
+  text-decoration: underline;
+}
+
+.help-section h2 {
+  margin-bottom: 16px;
+  font-size: 28px;
+}
+
+.help-section h3 {
+  margin-top: 16px;
+  margin-bottom: 8px;
+  font-size: 18px;
+}
+
+.help-list {
+  list-style: disc;
+  padding-left: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.help-list.ordered {
+  list-style: decimal;
+}
+
+.help-list code {
+  background: rgba(0, 47, 108, 0.08);
+  padding: 0 6px;
+  border-radius: 6px;
+  font-size: 13px;
+}
+
+.help-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 20px 0;
+  font-size: 14px;
+}
+
+.help-table th,
+.help-table td {
+  border: 1px solid rgba(0, 47, 108, 0.12);
+  padding: 10px 12px;
+  text-align: left;
+}
+
+.help-table thead th {
+  background: rgba(0, 103, 160, 0.12);
+  font-weight: 600;
+}
+
+.help-faq h3 {
+  font-size: 18px;
+  margin-top: 16px;
+}
+
+.help-faq p {
+  margin-top: 4px;
 }
 
 .session-multi {
@@ -847,7 +964,7 @@ body {
 .dashboard-panel {
   border-radius: var(--radius-lg);
   border: 1px solid rgba(0, 47, 108, 0.08);
-  background: var(--color-card);
+  background: var(--color-neutral-ice);
   box-shadow: var(--shadow-soft);
   padding: 32px;
 }
