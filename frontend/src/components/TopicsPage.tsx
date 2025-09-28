@@ -194,12 +194,33 @@ export default function TopicsPage() {
     if (primary) {
       return primary;
     }
-    const fallback = dimensionThemes.find((item) => item.id === theme.id)?.description?.trim();
+    const fallback = dimensionThemes
+      .find((item) => item.id === theme.id)
+      ?.description?.trim();
     return fallback ?? null;
   }, [theme, dimensionThemes]);
 
-  const heroDescription =
-    themeDescription ?? "Assess supporting topics for this theme and capture structured ratings.";
+  const dimensionDescription = dimension?.description?.trim() ?? null;
+
+  const guidanceSummary = (() => {
+    if (!data?.generic_guidance?.length) {
+      return null;
+    }
+    const preferred = data.generic_guidance.find((entry) => entry.level === 3);
+    const candidate = (preferred ?? data.generic_guidance[0])?.description?.trim();
+    return candidate || null;
+  })();
+
+  const heroDescriptionText =
+    themeDescription ?? guidanceSummary ?? dimensionDescription ??
+    "Assess supporting topics for this theme and capture structured ratings.";
+
+  const heroDescriptionParagraphs = useMemo(() => {
+    return heroDescriptionText
+      .split(/\r?\n+/)
+      .map((segment) => segment.trim())
+      .filter(Boolean);
+  }, [heroDescriptionText]);
 
   return (
     <div className="page-section">
@@ -208,7 +229,9 @@ export default function TopicsPage() {
           <div className="pill">{dimension ? dimension.name : "Theme"}</div>
           <div>
             <h1>{theme.name}</h1>
-            <p>{heroDescription}</p>
+            {heroDescriptionParagraphs.map((paragraph, index) => (
+              <p key={index}>{paragraph}</p>
+            ))}
           </div>
           <div className="status-card">
             <div className="status-item">
