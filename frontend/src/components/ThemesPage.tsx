@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 import { Link, useParams } from "react-router-dom";
+import { Grid3x3Icon, ImageIcon, ListChecksIcon, SparklesIcon } from "../icons";
 import { usePageBreadcrumb } from "../context/BreadcrumbContext";
 import { useDimensions } from "../hooks/useDimensions";
 import { useThemes } from "../hooks/useThemes";
@@ -35,6 +36,7 @@ function ThemeTile({
   category,
   imageSrc,
   fallbackImage,
+  topicCount,
 }: {
   dimensionId: number;
   themeId: number;
@@ -43,17 +45,17 @@ function ThemeTile({
   category?: string | null;
   imageSrc: string;
   fallbackImage: string;
+  topicCount?: number | null;
 }) {
   return (
     <Link
       to={`/dimensions/${dimensionId}/themes/${themeId}/topics`}
-      className="flex h-full flex-col rounded-2xl border border-[#d7deea] bg-white p-6 text-inherit no-underline shadow-sm transition-transform hover:-translate-y-1 hover:shadow-lg"
+      className="tile-card"
     >
-      <div className="relative mb-4 h-44 w-full overflow-hidden rounded-2xl bg-[#f5f7fb]">
+      <div className="tile-card__media">
         <img
           src={imageSrc}
           alt={title}
-          className="h-full w-full object-cover"
           onError={(event) => {
             if (event.currentTarget.src !== fallbackImage) {
               event.currentTarget.src = fallbackImage;
@@ -62,13 +64,26 @@ function ThemeTile({
             }
           }}
         />
+        <span className="tile-card__badge">
+          <SparklesIcon />
+          {category ?? "Theme"}
+        </span>
       </div>
-      <div className="flex flex-1 flex-col gap-2">
-        <span className="text-xs uppercase tracking-wide text-[#61758a]">{category ?? "Theme"}</span>
-        <h3 className="text-lg font-semibold text-[#121417] leading-tight">{title}</h3>
-        <p className="text-sm leading-6 text-[#4d5c6e] line-clamp-4">
+      <div className="tile-card__content">
+        <h3 className="tile-card__title">{title}</h3>
+        <p className="tile-card__description line-clamp-4">
           {description ?? "Review the topics and capture ratings for this theme."}
         </p>
+        <div className="tile-card__meta">
+          <span className="badge-soft">
+            <ListChecksIcon />
+            {topicCount ?? 0} topics
+          </span>
+          <span className="badge-soft">
+            <ImageIcon />
+            Shared art
+          </span>
+        </div>
       </div>
     </Link>
   );
@@ -119,10 +134,16 @@ export default function ThemesPage() {
         </div>
         <div className="status-card">
           <div className="status-item">
+            <span className="status-item__icon">
+              <SparklesIcon />
+            </span>
             <div className="status-label">Themes</div>
             <div className="status-value">{loading ? "–" : themes.length}</div>
           </div>
           <div className="status-item">
+            <span className="status-item__icon">
+              <Grid3x3Icon />
+            </span>
             <div className="status-label">Dimension</div>
             <div className="status-value">{dimension.name}</div>
           </div>
@@ -157,6 +178,7 @@ export default function ThemesPage() {
               category={theme.category}
               imageSrc={themeImage}
               fallbackImage={fallbackImage}
+              topicCount={theme.topic_count}
             />
           );
         })}

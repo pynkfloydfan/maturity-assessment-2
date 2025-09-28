@@ -199,6 +199,15 @@ Perform these steps whenever you want a quick end-to-end verification:
 - Colour tokens (CSS variables beginning with `--color-`) live near the top of
   `frontend/src/index.css`. Adjust these to personalise the palette and typography.
 
+### Iconography & badges
+
+- Lucide icons are curated via `frontend/src/icons.ts`. Import icon components
+  from that module so the bundle only includes the symbols we actually render.
+- Reusable card, badge, and status styles live in `frontend/src/index.css`
+  (`.tile-card`, `.badge-soft`, `.status-card`, `.topic-card`). Extend those
+  classes when adding new surfaces to keep shadows, corner radius, and hover
+  treatments consistent.
+
 ## Next steps
 
 See `new-ui-plan/steps.md` for the remaining migration milestones:

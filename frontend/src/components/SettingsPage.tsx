@@ -12,6 +12,14 @@ import type {
 } from "../api/types";
 import { useSessionContext } from "../context/SessionContext";
 import { usePageBreadcrumb } from "../context/BreadcrumbContext";
+import {
+  DatabaseIcon,
+  FileSpreadsheetIcon,
+  HistoryIcon,
+  PaletteIcon,
+  ShieldCheckIcon,
+  UsersIcon,
+} from "../icons";
 
 const DEFAULT_SQLITE_PATH = "./resilience.db";
 const DEFAULT_EXCEL_PATH = "app/source_data/enhanced_operational_resilience_maturity_v6.xlsx";
@@ -287,14 +295,23 @@ export default function SettingsPage() {
         </div>
         <div className="status-card">
           <div className="status-item">
+            <span className="status-item__icon">
+              <DatabaseIcon />
+            </span>
             <div className="status-label">Database backend</div>
             <div className="status-value">{dbForm.backend === "mysql" ? "MySQL" : "SQLite"}</div>
           </div>
           <div className="status-item">
+            <span className="status-item__icon">
+              <UsersIcon />
+            </span>
             <div className="status-label">Sessions available</div>
             <div className="status-value">{sessions.length}</div>
           </div>
           <div className="status-item">
+            <span className="status-item__icon">
+              <FileSpreadsheetIcon />
+            </span>
             <div className="status-label">Spreadsheet source</div>
             <div className="status-value">{excelPath ? "Configured" : "Not set"}</div>
           </div>
@@ -617,7 +634,9 @@ export default function SettingsPage() {
 
             <div className="feature-list">
               <div className="feature-item">
-                <span className="feature-icon">D</span>
+                <span className="feature-icon">
+                  <HistoryIcon />
+                </span>
                 <div className="feature-copy">
                   <span className="feature-title">Data export history</span>
                   <span className="feature-description">
@@ -626,7 +645,9 @@ export default function SettingsPage() {
                 </div>
               </div>
               <div className="feature-item">
-                <span className="feature-icon">T</span>
+                <span className="feature-icon">
+                  <PaletteIcon />
+                </span>
                 <div className="feature-copy">
                   <span className="feature-title">Brand &amp; theming controls</span>
                   <span className="feature-description">
@@ -635,7 +656,9 @@ export default function SettingsPage() {
                 </div>
               </div>
               <div className="feature-item">
-                <span className="feature-icon">S</span>
+                <span className="feature-icon">
+                  <ShieldCheckIcon />
+                </span>
                 <div className="feature-copy">
                   <span className="feature-title">System health</span>
                   <span className="feature-description">

@@ -78,3 +78,9 @@ product that makes better use of widescreen layouts.
 - [ ] Documentation updates (README + future design notes).
 - [ ] Visual polish: shadows, hover states, badge styles.
 - [ ] Optional: new icons/illustrations (depends on asset selection).
+
+## Suggestion for design improvements
+
+- Introduce lightweight filtering or sorting (e.g. “show highest risk” toggle) on the Dimensions view so the refreshed cards support prioritisation workflows during workshops.
+- Add contextual tooltips to the new status badges, clarifying how coverage and average scores are calculated, to help first-time facilitators explain the metrics in meetings.
+- Explore a compact session overview drawer in the header that reuses the new iconography and shadows to surface recent activity without leaving the current page.

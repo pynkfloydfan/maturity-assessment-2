@@ -13,6 +13,7 @@ class Dimension(BaseModel):
     image_filename: Optional[str] = None
     image_alt: Optional[str] = None
     theme_count: Optional[int] = None
+    topic_count: Optional[int] = None
 
 
 class Theme(BaseModel):

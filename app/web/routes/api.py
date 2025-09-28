@@ -364,8 +364,13 @@ def get_dashboard_figures(
 @router.get("/dimensions", response_model=list[Dimension])
 def list_dimensions(db: Session = Depends(get_db_session)) -> list[Dimension]:
     rows = (
-        db.query(DimensionORM, func.count(ThemeORM.id))
+        db.query(
+            DimensionORM,
+            func.count(func.distinct(ThemeORM.id)),
+            func.count(func.distinct(TopicORM.id)),
+        )
         .outerjoin(ThemeORM, ThemeORM.dimension_id == DimensionORM.id)
+        .outerjoin(TopicORM, TopicORM.theme_id == ThemeORM.id)
         .group_by(DimensionORM.id)
         .order_by(DimensionORM.name)
         .all()
@@ -378,8 +383,9 @@ def list_dimensions(db: Session = Depends(get_db_session)) -> list[Dimension]:
             image_filename=dimension.image_filename,
             image_alt=dimension.image_alt,
             theme_count=int(theme_count or 0),
+            topic_count=int(topic_count or 0),
         )
-        for dimension, theme_count in rows
+        for dimension, theme_count, topic_count in rows
     ]
 
 

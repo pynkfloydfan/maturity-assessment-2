@@ -1,6 +1,7 @@
 import { ChangeEvent, useMemo } from "react";
 import { Link, NavLink } from "react-router-dom";
 import avatarImage from "../../assets/user-avatar.png";
+import { LifeBuoyIcon } from "../../icons";
 import Breadcrumb from "./Breadcrumb";
 import { useSessionContext } from "../../context/SessionContext";
 import { useBreadcrumbContext } from "../../context/BreadcrumbContext";
@@ -80,6 +81,7 @@ export default function Header() {
             </select>
           </div>
           <button type="button" className="btn-secondary">
+            <LifeBuoyIcon />
             Support
           </button>
           <div className="avatar-frame">

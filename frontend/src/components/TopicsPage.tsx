@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, type ChangeEvent } from "react";
 import { useParams } from "react-router-dom";
+import { GaugeIcon, ListChecksIcon, SaveIcon } from "../icons";
 import { useThemeTopics } from "../hooks/useThemeTopics";
 import { useSessionContext } from "../context/SessionContext";
 import { useDimensions } from "../hooks/useDimensions";
@@ -235,10 +236,16 @@ export default function TopicsPage() {
           </div>
           <div className="status-card">
             <div className="status-item">
+              <span className="status-item__icon">
+                <ListChecksIcon />
+              </span>
               <div className="status-label">Topics</div>
               <div className="status-value">{loading ? "–" : topicCount}</div>
             </div>
             <div className="status-item status-item--metrics">
+              <span className="status-item__icon">
+                <GaugeIcon />
+              </span>
               <div>
                 <div className="status-label">Coverage &amp; Score</div>
                 <div className="status-value">{coverageDisplay} · {averageDisplay}</div>
@@ -246,7 +253,10 @@ export default function TopicsPage() {
               </div>
             </div>
             <div className="status-item status-item--actions">
-              <div>
+              <div className="status-item__header">
+                <span className="status-item__icon">
+                  <SaveIcon />
+                </span>
                 <div className="status-label">Status</div>
                 <div
                   className={`status-value${hasChanges && !saving ? " status-value--dirty" : ""}`}
@@ -260,7 +270,12 @@ export default function TopicsPage() {
                 onClick={handleSave}
                 disabled={!hasChanges || saving}
               >
-                {saving ? "Saving…" : "Save changes"}
+                {saving ? "Saving…" : (
+                  <>
+                    <SaveIcon />
+                    Save changes
+                  </>
+                )}
               </button>
             </div>
           </div>
@@ -359,14 +374,19 @@ function TopicAssessmentCard({ topic, ratingScale, state, updateState, dirty }: 
   };
 
   return (
-    <article className="rounded-xl border border-[#e5e8eb] bg-white p-6 shadow-sm">
-      <header className="mb-4 flex flex-col gap-2">
-        <div className="flex items-start justify-between gap-4">
+    <article className="topic-card" data-dirty={dirty ? "true" : "false"}>
+      <header className="topic-card__header">
+        <div className="topic-card__support">
           <div>
-            <h2 className="text-xl font-semibold text-[#121417]">{topic.name}</h2>
-            {topic.description && <p className="mt-1 text-sm leading-5 text-[#4d5c6e]">{topic.description}</p>}
+            <h2 className="topic-card__title">{topic.name}</h2>
+            {topic.description && <p className="text-sm leading-6 text-[#4d5c6e]">{topic.description}</p>}
           </div>
-          {dirty && <span className="text-xs font-medium uppercase tracking-wide text-[#0d80f2]">Unsaved</span>}
+          {dirty && (
+            <span className="topic-card__chip">
+              <SaveIcon />
+              Unsaved
+            </span>
+          )}
         </div>
       </header>
       <div className="flex flex-col gap-6 md:flex-row">

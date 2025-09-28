@@ -5,6 +5,7 @@ export interface Dimension {
   image_filename?: string | null;
   image_alt?: string | null;
   theme_count?: number | null;
+  topic_count?: number | null;
 }
 
 export interface Theme {

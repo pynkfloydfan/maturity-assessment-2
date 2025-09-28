@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 import { Link } from "react-router-dom";
+import { Grid3x3Icon, ImageIcon, ListChecksIcon, SparklesIcon } from "../icons";
 import { usePageBreadcrumb } from "../context/BreadcrumbContext";
 import { useDimensions } from "../hooks/useDimensions";
 
@@ -27,22 +28,25 @@ function DimensionTile({
   title,
   description,
   imageSrc,
+  themeCount,
+  topicCount,
 }: {
   id: number;
   title: string;
   description?: string | null;
   imageSrc: string;
+  themeCount?: number | null;
+  topicCount?: number | null;
 }) {
   return (
     <Link
       to={`/dimensions/${id}/themes`}
-      className="flex h-full flex-col rounded-2xl border border-[#d7deea] bg-white p-6 text-inherit no-underline shadow-sm transition-transform hover:-translate-y-1 hover:shadow-lg"
+      className="tile-card"
     >
-      <div className="relative mb-4 h-48 w-full overflow-hidden rounded-2xl bg-[#f5f7fb]">
+      <div className="tile-card__media">
         <img
           src={imageSrc}
           alt={title}
-          className="h-full w-full object-cover"
           onError={(event) => {
             if (event.currentTarget.src !== DIMENSION_PLACEHOLDER) {
               event.currentTarget.src = DIMENSION_PLACEHOLDER;
@@ -50,11 +54,21 @@ function DimensionTile({
           }}
         />
       </div>
-      <div className="flex flex-1 flex-col gap-2">
-        <h3 className="text-lg font-semibold text-[#121417] leading-tight">{title}</h3>
-        <p className="text-sm leading-6 text-[#4d5c6e] line-clamp-4">
+      <div className="tile-card__content">
+        <h3 className="tile-card__title">{title}</h3>
+        <p className="tile-card__description line-clamp-4">
           {description ?? "Explore the themes and topics captured within this dimension."}
         </p>
+        <div className="tile-card__meta">
+          <span className="badge-soft">
+            <SparklesIcon />
+            {`${themeCount ?? 0} themes`}
+          </span>
+          <span className="badge-soft">
+            <ListChecksIcon />
+            {`${topicCount ?? 0} topics`}
+          </span>
+        </div>
       </div>
     </Link>
   );
@@ -87,10 +101,10 @@ export default function DimensionsPage() {
   return (
     <div className="page-section">
       <div className="page-hero">
-        <div className="pill">Dimension Library</div>
-        <div>
-          <h1>Explore your resilience landscape</h1>
-          <p>
+      <div className="pill">Dimension Library</div>
+      <div>
+        <h1>Explore your resilience landscape</h1>
+        <p>
             Navigate every dimension of the operational resilience framework with richer guidance,
             imagery, and at-a-glance insights. Select a card to drill into themes and capture
             structured assessments.
@@ -98,14 +112,23 @@ export default function DimensionsPage() {
         </div>
         <div className="status-card">
           <div className="status-item">
+            <span className="status-item__icon">
+              <Grid3x3Icon />
+            </span>
             <div className="status-label">Dimensions</div>
             <div className="status-value">{loading ? "–" : dimensionCount}</div>
           </div>
           <div className="status-item">
+            <span className="status-item__icon">
+              <SparklesIcon />
+            </span>
             <div className="status-label">Themes</div>
             <div className="status-value">{loading ? "–" : themeCount}</div>
           </div>
           <div className="status-item">
+            <span className="status-item__icon">
+              <ImageIcon />
+            </span>
             <div className="status-label">Imagery</div>
             <div className="status-value">Curated</div>
           </div>
@@ -134,6 +157,8 @@ export default function DimensionsPage() {
               title={dimension.name}
               description={dimension.description}
               imageSrc={imageSrc}
+              themeCount={dimension.theme_count}
+              topicCount={dimension.topic_count}
             />
           );
         })}
