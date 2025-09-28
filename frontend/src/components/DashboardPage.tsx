@@ -16,8 +16,8 @@ function Tile({ tile }: { tile: DashboardTile }) {
 
   return (
     <div
-      className="heatmap-tile flex min-w-[180px] flex-col gap-2 rounded-xl border border-[#e1e6ef] bg-white p-4 shadow-sm"
-      style={{ borderColor: tile.color ? tile.color : "#e1e6ef" }}
+      className="heatmap-tile flex min-w-[180px] flex-col gap-2 rounded-xl border-3 border-[#e1e6ef] bg-white p-4 shadow-sm"
+      style={tile.color ? { borderColor: tile.color } : undefined}
     >
       <span className="text-sm font-medium text-[#61758a]">{tile.name}</span>
       <div className="flex items-baseline gap-2">

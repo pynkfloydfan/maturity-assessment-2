@@ -1,6 +1,8 @@
-import { Fragment } from "react";
+import { Fragment, ReactNode } from "react";
 
-const sections = [
+interface HelpSection { id: string; title: string; content: ReactNode; }
+
+const sections: HelpSection[] = [
   {
     id: "introduction",
     title: "Introduction",
@@ -21,21 +23,17 @@ const sections = [
     content: (
       <ol className="help-list ordered">
         <li>
-          <strong>Install dependencies:</strong> run <code>poetry install</code> for backend tooling and
-          <code>npm install</code> inside <code>frontend/</code> for the React bundle.
+          <strong>Install dependencies:</strong> run <code>poetry install</code> for backend tooling and {' '}<code>npm install</code> inside <code>frontend/</code> for the React bundle.
         </li>
         <li>
           <strong>Configure the database:</strong> use <em>Settings → Database configuration</em> or
           provide the <code>DB_</code> environment variables listed below.
         </li>
         <li>
-          <strong>Initialise the schema:</strong> click <em>Initialise tables</em> or run
-          <code>poetry run alembic upgrade head</code> to apply migrations.
+          <strong>Initialise the schema:</strong> click <em>Initialise tables</em> or run {' '}<code>poetry run alembic upgrade head</code> to apply migrations.
         </li>
         <li>
-          <strong>Seed the enhanced dataset:</strong> trigger seeding from Settings or run
-          <code>poetry run seed-database</code> (defaults to
-          <code>app/source_data/enhanced_operational_resilience_maturity_v6.xlsx</code>).
+          <strong>Seed the enhanced dataset:</strong> trigger seeding from Settings or run {' '}<code>poetry run seed-database</code> (defaults to {' '}<code>app/source_data/enhanced_operational_resilience_maturity_v6.xlsx</code>).
         </li>
         <li>
           <strong>Create a session:</strong> add at least one session in Settings so dashboards have
@@ -104,8 +102,7 @@ const sections = [
     content: (
       <Fragment>
         <p>
-          The dashboard pulls data from <code>/api/sessions/{'{id}'}/dashboard</code> and
-          <code>/api/sessions/{'{id}'}/dashboard/figures</code> to provide a holistic view.
+          The dashboard pulls data from <code>/api/sessions/{'{id}'}/dashboard</code> and {' '}<code>/api/sessions/{'{id}'}/dashboard/figures</code> to provide a holistic view.
         </p>
         <ul className="help-list">
           <li>
@@ -207,8 +204,7 @@ const sections = [
           The canonical workbook is <code>app/source_data/enhanced_operational_resilience_maturity_v6.xlsx</code>.
         </li>
         <li>
-          Seeding populates dimensions, themes, topics, rating scales, guidance, and explanations (see
-          <code>scripts/seed_dataset.py</code>).
+          Seeding populates dimensions, themes, topics, rating scales, guidance, and explanations (see {' '}<code>scripts/seed_dataset.py</code>).
         </li>
         <li>
           Re-running the seed script updates descriptions and replaces per-topic guidance while keeping IDs
@@ -396,7 +392,7 @@ export default function HelpPage() {
       <div className="help-hero card">
         <h1>Help &amp; User Guide</h1>
         <p>
-          Master every feature of the resilience assessment platform—from database setup to dashboards,
+          Master every feature of the resilience assessment platform from database setup to dashboards,
           exports, and bulk Excel workflows.
         </p>
         <nav className="help-toc">
