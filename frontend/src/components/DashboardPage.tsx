@@ -6,8 +6,19 @@ import { usePageBreadcrumb } from "../context/BreadcrumbContext";
 import { getDimensionTiles, getRadarFigure, useDashboard } from "../hooks/useDashboard";
 import type { DashboardTile } from "../api/types";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "./ui/tabs";
+import { CMMI_LEVEL_CONFIG } from "../constants/cmmi";
 
 const Plot = createPlotlyComponent(Plotly);
+
+const CMMI_LEVELS_DESC = [...CMMI_LEVEL_CONFIG].sort((a, b) => b.level - a.level);
+const MIN_CMMI_LEVEL = Math.min(...CMMI_LEVEL_CONFIG.map((entry) => entry.level));
+const MAX_CMMI_LEVEL = Math.max(...CMMI_LEVEL_CONFIG.map((entry) => entry.level));
+const CMMI_LEVEL_RANGE = Math.max(MAX_CMMI_LEVEL - MIN_CMMI_LEVEL, 1);
+const HEATMAP_GRADIENT = `linear-gradient(180deg, ${CMMI_LEVELS_DESC.map((entry) => {
+  const progress = (entry.level - MIN_CMMI_LEVEL) / CMMI_LEVEL_RANGE;
+  const position = 100 - progress * 100;
+  return `${entry.color} ${position}%`;
+}).join(", ")})`;
 
 function Tile({ tile }: { tile: DashboardTile }) {
   const average = typeof tile.average === "number" ? tile.average.toFixed(2) : "—";
@@ -140,10 +151,31 @@ export default function DashboardPage() {
         <TabsContent value="heatmap">
           {hasTiles ? (
             <section className="dashboard-panel">
-              <div className="heatmap-grid">
-                {tiles.map((tile) => (
-                  <Tile key={tile.id} tile={tile} />
-                ))}
+              <div className="heatmap-layout">
+                <div className="heatmap-grid">
+                  {tiles.map((tile) => (
+                    <Tile key={tile.id} tile={tile} />
+                  ))}
+                </div>
+                <aside className="heatmap-legend" aria-label="CMMI maturity scale">
+                  <span className="heatmap-legend__title">CMMI scale</span>
+                  <div className="heatmap-legend__scale">
+                    <div className="heatmap-legend__gradient" style={{ background: HEATMAP_GRADIENT }} />
+                    <div className="heatmap-legend__steps">
+                      {CMMI_LEVELS_DESC.map((entry) => (
+                        <div key={entry.level} className="heatmap-legend__step">
+                          <span
+                            className="heatmap-legend__dot"
+                            style={{ backgroundColor: entry.color }}
+                          />
+                          <span className="heatmap-legend__label">
+                            {entry.level} - {entry.label}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </aside>
               </div>
             </section>
           ) : (

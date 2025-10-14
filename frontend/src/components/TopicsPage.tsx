@@ -8,14 +8,7 @@ import { useThemes } from "../hooks/useThemes";
 import { apiPost } from "../api/client";
 import { usePageBreadcrumb } from "../context/BreadcrumbContext";
 import type { RatingScaleItem, RatingUpdatePayload, TopicDetail } from "../api/types";
-
-const CMMI_LEVEL_LABELS: Record<number, string> = {
-  1: "Initial",
-  2: "Managed",
-  3: "Defined",
-  4: "Quantitatively Managed",
-  5: "Optimizing",
-};
+import { CMMI_LEVEL_LABELS } from "../constants/cmmi";
 
 type TopicSnapshot = Pick<RatingUpdatePayload, "rating_level" | "is_na" | "comment">;
 
