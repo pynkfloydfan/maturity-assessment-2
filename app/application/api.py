@@ -8,6 +8,7 @@ with proper error handling, user-friendly messages, and comprehensive logging.
 from __future__ import annotations
 
 from decimal import Decimal
+from datetime import date, datetime
 import json
 import math
 from typing import Any
@@ -41,6 +42,7 @@ from ..infrastructure.models import (
     TopicORM,
 )
 from ..infrastructure.repositories import (
+    AcronymRepo,
     EntryRepo,
     SessionRepo,
     TopicRepo,
@@ -102,8 +104,8 @@ def create_assessment_session(
     session: Session,
     name: str,
     assessor: str | None = None,
-    organization: str | None = None,
     notes: str | None = None,
+    created_at: datetime | None = None,
 ) -> AssessmentSessionORM:
     """
     Create a new assessment session with validation.
@@ -112,8 +114,8 @@ def create_assessment_session(
         session: Database session
         name: Session name (required)
         assessor: Assessor name (optional)
-        organization: Organization name (optional)
         notes: Session notes (optional)
+        created_at: Explicit creation timestamp (defaults to current UTC time if omitted)
 
     Returns:
         Created AssessmentSessionORM instance
@@ -127,15 +129,20 @@ def create_assessment_session(
         ...     session,
         ...     "Q1 2024 Assessment",
         ...     "John Smith",
-        ...     "ACME Corp",
-        ...     "Initial maturity baseline"
+        ...     "Initial maturity baseline",
+        ...     datetime(2024, 1, 15, 0, 0),
         ... )
         >>> print(f"Created session: {session_obj.id}")
     """
     # Validate input
     validation_result = validate_input(
         SessionCreationInput,
-        {"name": name, "assessor": assessor, "organization": organization, "notes": notes},
+        {
+            "name": name,
+            "assessor": assessor,
+            "notes": notes,
+            "created_at": created_at,
+        },
     )
 
     if not validation_result.success:
@@ -147,14 +154,20 @@ def create_assessment_session(
     if validated_data is None:
         raise RuntimeError("Validation succeeded but returned no data")
 
+    normalized_created_at = validated_data.get("created_at") or created_at
+    if isinstance(normalized_created_at, date) and not isinstance(normalized_created_at, datetime):
+        normalized_created_at = datetime.combine(normalized_created_at, datetime.min.time())
+    if normalized_created_at is None:
+        normalized_created_at = datetime.utcnow()
+
     try:
         set_context(operation="create_session", session_name=name)
         repo = SessionRepo(session)
         session_obj = repo.create(
             name=validated_data["name"],
             assessor=validated_data["assessor"],
-            organization=validated_data["organization"],
             notes=validated_data["notes"],
+            created_at=normalized_created_at,
         )
 
         logger.info(f"Created assessment session '{name}' with ID {session_obj.id}")
@@ -714,7 +727,6 @@ def combine_sessions_to_master(
     source_session_ids: list[int],
     name: str,
     assessor: str | None = None,
-    organization: str | None = None,
     notes: str | None = None,
 ) -> AssessmentSessionORM:
     """
@@ -729,7 +741,6 @@ def combine_sessions_to_master(
         source_session_ids: List of session IDs to combine
         name: Name for the new master session
         assessor: Assessor for the master session (optional)
-        organization: Organization for the master session (optional)
         notes: Notes for the master session (optional)
 
     Returns:
@@ -746,7 +757,6 @@ def combine_sessions_to_master(
         ...     [1, 2, 3],
         ...     "Combined Q1-Q3 Assessment",
         ...     "Assessment Team",
-        ...     "ACME Corp",
         ...     "Quarterly combined results"
         ... )
         >>> print(f"Created master session: {master.id}")
@@ -758,7 +768,6 @@ def combine_sessions_to_master(
             "source_session_ids": source_session_ids,
             "name": name,
             "assessor": assessor,
-            "organization": organization,
             "notes": notes,
         },
     )
@@ -780,7 +789,10 @@ def combine_sessions_to_master(
 
         # Create master session
         master = create_assessment_session(
-            session, name=name, assessor=assessor, organization=organization, notes=notes
+            session,
+            name=name,
+            assessor=assessor,
+            notes=notes,
         )
 
         # Get all topics
@@ -919,7 +931,6 @@ def get_session_summary(session: Session, session_id: int) -> dict[str, Any]:
             "id": session_obj.id,
             "name": session_obj.name,
             "assessor": session_obj.assessor,
-            "organization": session_obj.organization,
             "notes": session_obj.notes,
             "created_at": session_obj.created_at,
             "statistics": {
@@ -950,4 +961,28 @@ def get_session_summary(session: Session, session_id: int) -> dict[str, Any]:
             details=error_details,
             user_message="Unable to load session summary. Please try again.",
         ) from e
+
+
+@log_operation("list_acronyms")
+def list_acronyms(session: Session) -> list[dict[str, str | None]]:
+    """
+    Retrieve all acronyms for UI hover enrichment.
+
+    Args:
+        session: Database session
+
+    Returns:
+        List of dictionaries describing each acronym
+    """
+    repo = AcronymRepo(session)
+    acronyms = repo.list_all()
+    return [
+        {
+            "id": item.id,
+            "acronym": item.acronym,
+            "full_term": item.full_term,
+            "meaning": item.meaning,
+        }
+        for item in acronyms
+    ]
 

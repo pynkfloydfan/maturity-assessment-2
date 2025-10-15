@@ -28,6 +28,13 @@ export interface ThemeLevelGuidanceItem {
   description: string;
 }
 
+export interface Acronym {
+  id: number;
+  acronym: string;
+  full_term: string;
+  meaning?: string | null;
+}
+
 export interface TopicDetail {
   id: number;
   name: string;
@@ -49,7 +56,6 @@ export interface SessionListItem {
   id: number;
   name: string;
   assessor?: string | null;
-  organization?: string | null;
   created_at: string;
 }
 

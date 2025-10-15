@@ -6,6 +6,7 @@ Tests validation, error handling, logging, configuration, and repository pattern
 
 import os
 import tempfile
+from datetime import datetime
 from typing import Any, cast
 from unittest.mock import patch
 
@@ -30,7 +31,7 @@ from app.infrastructure.exceptions import (
 )
 from app.infrastructure.logging import get_logger, setup_logging
 from app.infrastructure.models import Base
-from app.infrastructure.repositories import SessionRepo
+from app.infrastructure.repositories import AcronymRepo, SessionRepo
 
 
 class TestPydanticValidation:
@@ -43,8 +44,8 @@ class TestPydanticValidation:
             {
                 "name": "Test Session",
                 "assessor": "John Doe",
-                "organization": "ACME Corp",
                 "notes": "Test notes",
+                "created_at": "2024-01-15",
             },
         )
 
@@ -53,6 +54,7 @@ class TestPydanticValidation:
         data = result.data
         assert data["name"] == "Test Session"
         assert data["assessor"] == "John Doe"
+        assert isinstance(data["created_at"], datetime)
 
     def test_session_creation_validation_failure(self):
         """Test session creation validation with invalid data."""
@@ -104,8 +106,8 @@ class TestPydanticValidation:
             {
                 "name": "  Test Session  ",  # Whitespace should be stripped
                 "assessor": "<script>alert('xss')</script>John",  # HTML should be escaped
-                "organization": "ACME Corp",
                 "notes": "Test\x00notes",  # Control characters should be removed
+                "created_at": "2024-03-05",
             },
         )
 
@@ -115,6 +117,7 @@ class TestPydanticValidation:
         assert data["name"] == "Test Session"
         assert "&lt;script&gt;" in data["assessor"]  # HTML escaped
         assert "\x00" not in data["notes"]  # Control char removed
+        assert data["created_at"].date() == datetime(2024, 3, 5).date()
 
 
 class TestErrorHandling:
@@ -265,12 +268,32 @@ class TestRepositoryPatterns:
         repo = SessionRepo(test_session)
 
         session_obj = repo.create(
-            name="Test Session", assessor="John Doe", organization="ACME Corp", notes="Test notes"
+            name="Test Session",
+            assessor="John Doe",
+            notes="Test notes",
+            created_at=datetime(2024, 1, 1),
         )
 
         assert session_obj.id is not None
         assert session_obj.name == "Test Session"
         assert session_obj.assessor == "John Doe"
+
+    def test_acronym_repository_create_and_list(self, test_session):
+        """Test acronym repository create and retrieval."""
+        repo = AcronymRepo(test_session)
+
+        created = repo.create(
+            acronym="BCP",
+            full_term="Business Continuity Plan",
+            meaning="Ensures continuity planning is captured.",
+        )
+
+        assert created.id is not None
+
+        acronyms = repo.list_all()
+        assert len(acronyms) == 1
+        assert acronyms[0].acronym == "BCP"
+        assert acronyms[0].full_term == "Business Continuity Plan"
 
     def test_session_repository_validation(self, test_session):
         """Test repository input validation."""

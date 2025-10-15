@@ -46,7 +46,6 @@ class AssessmentSession:
     id: int
     name: str
     assessor: str | None
-    organization: str | None
     created_at: datetime
     notes: str | None = None
 
@@ -59,4 +58,13 @@ class AssessmentEntry:
     rating_level: int | None  # None if N/A
     is_na: bool
     comment: str | None
+    created_at: datetime
+
+
+@dataclass(slots=True)
+class Acronym:
+    id: int
+    acronym: str
+    full_term: str
+    meaning: str | None
     created_at: datetime

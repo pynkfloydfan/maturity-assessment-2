@@ -167,3 +167,14 @@ class AssessmentEntryORM(Base):
 
     session: Mapped[AssessmentSessionORM] = relationship(back_populates="entries")
 
+
+class AcronymORM(Base):
+    __tablename__ = "acronyms"
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    acronym: Mapped[str] = mapped_column(String(32), unique=True, nullable=False, index=True)
+    full_term: Mapped[str] = mapped_column(String(255), nullable=False)
+    meaning: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=False), default=datetime.utcnow, nullable=False
+    )
+

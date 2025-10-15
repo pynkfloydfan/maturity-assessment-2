@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useMemo, useState, type ChangeEvent } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type ChangeEvent,
+  type MouseEvent,
+} from "react";
 import { useParams } from "react-router-dom";
 import { GaugeIcon, ListChecksIcon, SaveIcon } from "../icons";
 import { useThemeTopics } from "../hooks/useThemeTopics";
@@ -9,6 +16,17 @@ import { apiPost } from "../api/client";
 import { usePageBreadcrumb } from "../context/BreadcrumbContext";
 import type { RatingScaleItem, RatingUpdatePayload, TopicDetail } from "../api/types";
 import { CMMI_LEVEL_LABELS } from "../constants/cmmi";
+import { useAcronymHighlighter } from "../hooks/useAcronymHighlighter";
+import { useNavigationBlocker } from "../hooks/useNavigationBlocker";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "./ui/alert-dialog";
 
 type TopicSnapshot = Pick<RatingUpdatePayload, "rating_level" | "is_na" | "comment">;
 
@@ -29,6 +47,8 @@ export default function TopicsPage() {
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
+  const [showUnsavedDialog, setShowUnsavedDialog] = useState(false);
+  const highlight = useAcronymHighlighter();
 
   const buildSnapshot = useCallback((topics: TopicDetail[]): Record<number, TopicSnapshot> => {
     return topics.reduce<Record<number, TopicSnapshot>>((acc, topic) => {
@@ -85,8 +105,23 @@ export default function TopicsPage() {
     return data.topics.some((topic) => isTopicDirty(topic.id));
   }, [data, isTopicDirty]);
 
-  const handleSave = useCallback(async () => {
-    if (!activeSessionId || !data) return;
+  const navigationBlocker = useNavigationBlocker(hasChanges);
+
+  useEffect(() => {
+    if (navigationBlocker.pending && !showUnsavedDialog) {
+      setShowUnsavedDialog(true);
+    }
+  }, [navigationBlocker.pending, showUnsavedDialog]);
+
+  useEffect(() => {
+    if (!hasChanges && showUnsavedDialog) {
+      setShowUnsavedDialog(false);
+      navigationBlocker.reset();
+    }
+  }, [hasChanges, navigationBlocker, showUnsavedDialog]);
+
+  const handleSave = useCallback(async (): Promise<boolean> => {
+    if (!activeSessionId || !data) return false;
     const updates: RatingUpdatePayload[] = data.topics
       .filter((topic) => isTopicDirty(topic.id))
       .map((topic) => {
@@ -99,7 +134,7 @@ export default function TopicsPage() {
         };
       });
 
-    if (updates.length === 0) return;
+    if (updates.length === 0) return false;
 
     try {
       setSaving(true);
@@ -113,12 +148,69 @@ export default function TopicsPage() {
       if (typeof window !== "undefined") {
         window.setTimeout(() => setSaveMessage(null), 4000);
       }
+      return true;
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : "Failed to save ratings");
+      return false;
     } finally {
       setSaving(false);
     }
   }, [activeSessionId, data, isTopicDirty, topicState, refresh]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    if (!hasChanges) {
+      setShowUnsavedDialog(false);
+      return;
+    }
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = "";
+      return "";
+    };
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => {
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+    };
+  }, [hasChanges]);
+
+  const handleUnsavedDialogOpenChange = useCallback(
+    (nextOpen: boolean) => {
+      if (!nextOpen) {
+        setShowUnsavedDialog(false);
+        navigationBlocker.reset();
+      } else {
+        setShowUnsavedDialog(true);
+      }
+    },
+    [navigationBlocker],
+  );
+
+  const handleDiscardAndLeave = useCallback(
+    (event?: MouseEvent<HTMLButtonElement>) => {
+      if (event) event.preventDefault();
+      if (saving) return;
+      setShowUnsavedDialog(false);
+      navigationBlocker.proceed();
+    },
+    [navigationBlocker, saving],
+  );
+
+  const handleSaveAndLeave = useCallback(
+    async (event?: MouseEvent<HTMLButtonElement>) => {
+      if (event) event.preventDefault();
+      if (saving) return;
+      const saved = await handleSave();
+      if (!saved) {
+        return;
+      }
+      setShowUnsavedDialog(false);
+      navigationBlocker.proceed();
+    },
+    [handleSave, navigationBlocker, saving],
+  );
 
   const dimension = dimensions.find((item) => item.id === dimensionId);
   const theme = data?.theme;
@@ -217,129 +309,159 @@ export default function TopicsPage() {
   }, [heroDescriptionText]);
 
   return (
-    <div className="page-section">
-      {theme && (
-        <div className="page-hero">
-          <div className="pill">{dimension ? dimension.name : "Theme"}</div>
-          <div>
-            <h1>{theme.name}</h1>
-            {heroDescriptionParagraphs.map((paragraph, index) => (
-              <p key={index}>{paragraph}</p>
-            ))}
-          </div>
-          <div className="status-card">
-            <div className="status-item">
-              <span className="status-item__icon">
-                <ListChecksIcon />
-              </span>
-              <div className="status-label">Topics</div>
-              <div className="status-value">{loading ? "–" : topicCount}</div>
+    <>
+      <AlertDialog
+        open={showUnsavedDialog && Boolean(navigationBlocker.pending)}
+        onOpenChange={handleUnsavedDialogOpenChange}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              You have unsaved changes. Do you want to save them before leaving this page?
+            </AlertDialogTitle>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogAction
+              className="btn-primary"
+              disabled={saving}
+              onClick={(event) => handleSaveAndLeave(event)}
+            >
+              {saving ? "Saving…" : "Save changes"}
+            </AlertDialogAction>
+            <AlertDialogCancel
+              className="btn-secondary"
+              disabled={saving}
+              onClick={(event) => handleDiscardAndLeave(event)}
+            >
+              Don't save changes
+            </AlertDialogCancel>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+      <div className="page-section">
+        {theme && (
+          <div className="page-hero">
+            <div className="pill">{dimension ? highlight(dimension.name) : "Theme"}</div>
+            <div>
+              <h1>{highlight(theme.name)}</h1>
+              {heroDescriptionParagraphs.map((paragraph, index) => (
+                <p key={index}>{highlight(paragraph)}</p>
+              ))}
             </div>
-            <div className="status-item status-item--metrics">
-              <span className="status-item__icon">
-                <GaugeIcon />
-              </span>
-              <div>
-                <div className="status-label">Coverage &amp; Score</div>
-                <div className="status-value">{coverageDisplay} · {averageDisplay}</div>
-                <div className="status-note">Coverage · Avg score</div>
-              </div>
-            </div>
-            <div className="status-item status-item--actions">
-              <div className="status-item__header">
+            <div className="status-card">
+              <div className="status-item">
                 <span className="status-item__icon">
-                  <SaveIcon />
+                  <ListChecksIcon />
                 </span>
-                <div className="status-label">Status</div>
-                <div
-                  className={`status-value${hasChanges && !saving ? " status-value--dirty" : ""}`}
-                >
-                  {statusText}
+                <div className="status-label">Topics</div>
+                <div className="status-value">{loading ? "–" : topicCount}</div>
+              </div>
+              <div className="status-item status-item--metrics">
+                <span className="status-item__icon">
+                  <GaugeIcon />
+                </span>
+                <div>
+                  <div className="status-label">Coverage &amp; Score</div>
+                  <div className="status-value">{coverageDisplay} · {averageDisplay}</div>
+                  <div className="status-note">Coverage · Avg score</div>
                 </div>
               </div>
-              <button
-                type="button"
-                className={`${hasChanges && !saving ? "btn-primary" : "btn-secondary"} status-action`}
-                onClick={handleSave}
-                disabled={!hasChanges || saving}
-              >
-                {saving ? "Saving…" : (
-                  <>
+              <div className="status-item status-item--actions">
+                <div className="status-item__header">
+                  <span className="status-item__icon">
                     <SaveIcon />
-                    Save changes
-                  </>
-                )}
-              </button>
+                  </span>
+                  <div className="status-label">Status</div>
+                  <div
+                    className={`status-value${hasChanges && !saving ? " status-value--dirty" : ""}`}
+                  >
+                    {statusText}
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  className={`${hasChanges && !saving ? "btn-primary" : "btn-secondary"} status-action`}
+                  onClick={handleSave}
+                  disabled={!hasChanges || saving}
+                >
+                  {saving ? "Saving…" : (
+                    <>
+                      <SaveIcon />
+                      Save changes
+                    </>
+                  )}
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
-      <div className={`topic-layout${data?.generic_guidance?.length ? "" : " topic-layout--single"}`}>
-        <div className="topic-main">
-          <div className="page-toolbar">
-            <div className="page-toolbar__summary">
-              Session #{activeSessionId} · {topicCount} topics
+        )}
+        <div className={`topic-layout${data?.generic_guidance?.length ? "" : " topic-layout--single"}`}>
+          <div className="topic-main">
+            <div className="page-toolbar">
+              <div className="page-toolbar__summary">
+                Session #{activeSessionId} · {topicCount} topics
+              </div>
+              <div className="page-toolbar__actions">
+                {saveError && <span className="text-sm text-red-600">{saveError}</span>}
+                {saveMessage && <span className="text-sm text-green-600">{saveMessage}</span>}
+              </div>
             </div>
-            <div className="page-toolbar__actions">
-              {saveError && <span className="text-sm text-red-600">{saveError}</span>}
-              {saveMessage && <span className="text-sm text-green-600">{saveMessage}</span>}
-            </div>
-          </div>
 
-          {loading && <div className="text-sm text-[#61758a]">Loading topics…</div>}
-          {error && <div className="text-sm text-red-600">{error}</div>}
-          {!loading && !error && data && data.topics.length === 0 && (
-            <div className="rounded-lg border border-dashed border-[#d0d7e3] bg-white p-8 text-center text-[#61758a]">
-              No topics were found for this theme.
-            </div>
-          )}
-          {!loading && !error && data && data.topics.length > 0 && (
-            <section className="flex flex-col gap-4">
-              {data.topics.map((topic) => {
-                const current = topicState[topic.id] ?? initialState[topic.id] ?? {
-                  rating_level: topic.is_na ? null : topic.rating_level ?? null,
-                  is_na: topic.is_na,
-                  comment: topic.comment ?? "",
-                };
-                const dirty = isTopicDirty(topic.id);
-                return (
-                  <TopicAssessmentCard
-                    key={topic.id}
-                    topic={topic}
-                    ratingScale={data.rating_scale}
-                    state={current}
-                    updateState={updateTopicState}
-                    dirty={dirty}
-                  />
-                );
-              })}
-            </section>
-          )}
-        </div>
-
-        {data?.generic_guidance?.length ? (
-          <aside className="topic-sidebar">
-            <div className="topic-sidebar__card">
-              <h2 className="topic-sidebar__title">Theme-level guidance</h2>
-              <ul className="topic-sidebar__list">
-                {data.generic_guidance.map((item) => {
-                  const levelLabel = CMMI_LEVEL_LABELS[item.level];
-                  const heading = levelLabel
-                    ? `Level ${item.level} - ${levelLabel}`
-                    : `Level ${item.level}`;
+            {loading && <div className="text-sm text-[#61758a]">Loading topics…</div>}
+            {error && <div className="text-sm text-red-600">{error}</div>}
+            {!loading && !error && data && data.topics.length === 0 && (
+              <div className="rounded-lg border border-dashed border-[#d0d7e3] bg-white p-8 text-center text-[#61758a]">
+                No topics were found for this theme.
+              </div>
+            )}
+            {!loading && !error && data && data.topics.length > 0 && (
+              <section className="flex flex-col gap-4">
+                {data.topics.map((topic) => {
+                  const current = topicState[topic.id] ?? initialState[topic.id] ?? {
+                    rating_level: topic.is_na ? null : topic.rating_level ?? null,
+                    is_na: topic.is_na,
+                    comment: topic.comment ?? "",
+                  };
+                  const dirty = isTopicDirty(topic.id);
                   return (
+                    <TopicAssessmentCard
+                      key={topic.id}
+                      topic={topic}
+                      ratingScale={data.rating_scale}
+                      state={current}
+                      updateState={updateTopicState}
+                      dirty={dirty}
+                    />
+                  );
+                })}
+              </section>
+            )}
+          </div>
+
+          {data?.generic_guidance?.length ? (
+            <aside className="topic-sidebar">
+              <div className="topic-sidebar__card">
+                <h2 className="topic-sidebar__title">Theme-level guidance</h2>
+                <ul className="topic-sidebar__list">
+                  {data.generic_guidance.map((item) => {
+                    const levelLabel = CMMI_LEVEL_LABELS[item.level];
+                    const heading = levelLabel
+                      ? `Level ${item.level} - ${levelLabel}`
+                      : `Level ${item.level}`;
+                    return (
                     <li key={item.level} className="topic-sidebar__item">
-                      <span className="topic-sidebar__level">{heading}</span>
-                      <span className="topic-sidebar__copy">{item.description}</span>
+                      <span className="topic-sidebar__level">{highlight(heading)}</span>
+                      <span className="topic-sidebar__copy">{highlight(item.description)}</span>
                     </li>
                   );
                 })}
-              </ul>
-            </div>
-          </aside>
-        ) : null}
+                </ul>
+              </div>
+            </aside>
+          ) : null}
+        </div>
       </div>
-    </div>
+    </>
   );
 }
 
@@ -352,6 +474,7 @@ interface TopicAssessmentCardProps {
 }
 
 function TopicAssessmentCard({ topic, ratingScale, state, updateState, dirty }: TopicAssessmentCardProps) {
+  const highlight = useAcronymHighlighter();
   const sortedScale = [...ratingScale].sort((a, b) => a.level - b.level);
 
   const handleSelect = (level: number | null) => {
@@ -371,8 +494,10 @@ function TopicAssessmentCard({ topic, ratingScale, state, updateState, dirty }: 
       <header className="topic-card__header">
         <div className="topic-card__support">
           <div>
-            <h2 className="topic-card__title">{topic.name}</h2>
-            {topic.description && <p className="text-sm leading-6 text-[#4d5c6e]">{topic.description}</p>}
+            <h2 className="topic-card__title">{highlight(topic.name)}</h2>
+            {topic.description && (
+              <p className="text-sm leading-6 text-[#4d5c6e]">{highlight(topic.description)}</p>
+            )}
           </div>
           {dirty && (
             <span className="topic-card__chip">
@@ -409,7 +534,7 @@ function TopicAssessmentCard({ topic, ratingScale, state, updateState, dirty }: 
                   onChange={() => handleSelect(scale.level)}
                 />
                 <span className="font-medium">{scale.level}</span>
-                <span className="text-[#61758a]">{scale.label}</span>
+                <span className="text-[#61758a]">{highlight(scale.label)}</span>
               </label>
             ))}
           </fieldset>
@@ -435,11 +560,11 @@ function TopicAssessmentCard({ topic, ratingScale, state, updateState, dirty }: 
                 return (
                   <div key={scale.level}>
                     <div className="font-semibold text-[#121417]">Level {scale.level} · {scale.label}</div>
-                    {scale.description && <p className="text-xs text-[#61758a]">{scale.description}</p>}
+                    {scale.description && <p className="text-xs text-[#61758a]">{highlight(scale.description)}</p>}
                     {guidance.length > 0 ? (
                       <ul className="mt-1 list-disc pl-5">
                         {guidance.map((item, index) => (
-                          <li key={index}>{item}</li>
+                          <li key={index}>{highlight(item)}</li>
                         ))}
                       </ul>
                     ) : (

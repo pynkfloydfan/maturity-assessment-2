@@ -6062,3 +6062,10 @@ html {
     opacity: 0;
   }
 }
+
+.acronym-highlight {
+  cursor: help;
+  text-decoration: underline dotted currentColor;
+  text-decoration-thickness: 1px;
+  text-decoration-skip-ink: auto;
+}

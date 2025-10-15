@@ -46,6 +46,14 @@ const INITIAL_DB_FORM: DatabaseFormState = {
   mysql_database: "resilience",
 };
 
+function getTodayInputValue(): string {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
 function toInitRequest(state: DatabaseFormState, includePassword = false): DatabaseInitRequest {
   const payload: DatabaseInitRequest = {
     backend: state.backend,
@@ -93,12 +101,12 @@ export default function SettingsPage() {
   const [sessionFeedback, setSessionFeedback] = useState<Feedback>(null);
   const [combineSelection, setCombineSelection] = useState<string[]>([]);
   const [combineName, setCombineName] = useState<string>("Combined Assessment");
-  const [newSession, setNewSession] = useState({
+  const [newSession, setNewSession] = useState(() => ({
     name: "Baseline Assessment",
     assessor: "",
-    organization: "",
+    created_at: getTodayInputValue(),
     notes: "",
-  });
+  }));
   const [uploadFeedback, setUploadFeedback] = useState<Feedback>(null);
   const [uploadErrors, setUploadErrors] = useState<string[] | null>(null);
   const [uploadSessionId, setUploadSessionId] = useState<string>("");
@@ -186,12 +194,13 @@ export default function SettingsPage() {
       setSessionFeedback({ type: "error", message: "Session name is required" });
       return;
     }
+    const createdAt = newSession.created_at || getTodayInputValue();
     try {
       await apiPost("/api/sessions", {
         name: newSession.name.trim(),
         assessor: newSession.assessor.trim() || null,
-        organization: newSession.organization.trim() || null,
         notes: newSession.notes.trim() || null,
+        created_at: createdAt,
       });
       setSessionFeedback({ type: "success", message: "Session created" });
       refreshSessions();
@@ -573,9 +582,11 @@ export default function SettingsPage() {
                 />
                 <input
                   className="input-control"
-                  placeholder="Organization (optional)"
-                  value={newSession.organization}
-                  onChange={(event) => setNewSession((prev) => ({ ...prev, organization: event.target.value }))}
+                  type="date"
+                  aria-label="Session created date"
+                  max={getTodayInputValue()}
+                  value={newSession.created_at}
+                  onChange={(event) => setNewSession((prev) => ({ ...prev, created_at: event.target.value }))}
                 />
                 <input
                   className="input-control"

@@ -31,6 +31,7 @@ from .repositories_ratingscale import RatingScaleRepo  # re-export
 # Re-export split repositories so existing imports keep working:
 #   from app.infrastructure.repositories import SessionRepo, ...
 from .repositories_session import SessionRepo  # re-export
+from .repositories_acronym import AcronymRepo  # re-export
 from .repositories_theme import ThemeRepo  # re-export
 from .repositories_topic import TopicRepo  # re-export
 
@@ -42,6 +43,7 @@ __all__ = [
     "TopicRepo",
     "RatingScaleRepo",
     "EntryRepo",
+    "AcronymRepo",
 ]
 
 

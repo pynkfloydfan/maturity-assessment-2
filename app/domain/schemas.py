@@ -8,6 +8,7 @@ and data transfers within the resilience assessment system.
 from __future__ import annotations
 
 import re
+from datetime import datetime
 from decimal import Decimal
 from html import escape
 from typing import Any
@@ -80,8 +81,8 @@ class SessionCreationInput(BaseValidationSchema):
 
     name: str = Field(..., min_length=1, max_length=255, description="Session name")
     assessor: str | None = Field(None, max_length=255)
-    organization: str | None = Field(None, max_length=255)
     notes: str | None = Field(None, max_length=10000)
+    created_at: datetime | None = None
 
     @field_validator("name")
     def validate_session_name(cls, v):
@@ -95,7 +96,7 @@ class SessionCreationInput(BaseValidationSchema):
 
         return v.strip()
 
-    @field_validator("assessor", "organization")
+    @field_validator("assessor")
     def validate_optional_fields(cls, v):
         """Validate optional string fields."""
         if v is not None and len(v.strip()) == 0:
@@ -235,7 +236,6 @@ class SessionCombineInput(BaseValidationSchema):
     source_session_ids: list[int] = Field(..., min_items=1, max_items=50)
     name: str = Field(..., min_length=1, max_length=255)
     assessor: str | None = Field(None, max_length=255)
-    organization: str | None = Field(None, max_length=255)
     notes: str | None = Field(None, max_length=10000)
 
     @field_validator("source_session_ids")

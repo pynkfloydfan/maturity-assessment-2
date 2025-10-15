@@ -22,6 +22,7 @@ from ..infrastructure.config import get_settings
 from ..infrastructure.exceptions import DatabaseError, ResilienceAssessmentError, ValidationError
 from ..infrastructure.logging import get_logger, log_operation
 from ..infrastructure.repositories import (
+    AcronymRepo,
     DimensionRepo,
     EntryRepo,
     ExplanationRepo,
@@ -65,6 +66,7 @@ class BackupMetadata:
     total_sessions: int
     total_entries: int
     total_topics: int
+    total_acronyms: int
     checksum: str | None = None
     compressed: bool = False
     backup_type: str = "full"  # "full" or "incremental"
@@ -440,7 +442,6 @@ class BackupService:
                     "id": sess.id,
                     "name": sess.name,
                     "assessor": sess.assessor,
-                    "organization": sess.organization,
                     "notes": sess.notes,
                     "created_at": sess.created_at.isoformat(),
                 }
@@ -469,6 +470,20 @@ class BackupService:
                     )
             data["entries"] = all_entries
 
+            # Collect acronyms
+            acronym_repo = AcronymRepo(self.session)
+            acronyms = acronym_repo.list_all()
+            data["acronyms"] = [
+                {
+                    "id": item.id,
+                    "acronym": item.acronym,
+                    "full_term": item.full_term,
+                    "meaning": item.meaning,
+                    "created_at": item.created_at.isoformat(),
+                }
+                for item in acronyms
+            ]
+
             self.logger.info(
                 f"Collected backup data: {len(sessions)} sessions, {len(all_entries)} entries"
             )
@@ -490,6 +505,7 @@ class BackupService:
             total_sessions=len(backup_data.get("sessions", [])),
             total_entries=len(backup_data.get("entries", [])),
             total_topics=len(backup_data.get("topics", [])),
+            total_acronyms=len(backup_data.get("acronyms", [])),
             compressed=compressed,
             backup_type="full",
         )
@@ -546,6 +562,7 @@ class BackupService:
             "entries_restored": 0,
             "rating_scales_restored": 0,
             "explanations_restored": 0,
+            "acronyms_restored": 0,
         }
 
         try:
@@ -556,6 +573,7 @@ class BackupService:
             self.session.execute(text("DELETE FROM topics"))
             self.session.execute(text("DELETE FROM themes"))
             self.session.execute(text("DELETE FROM dimensions"))
+            self.session.execute(text("DELETE FROM acronyms"))
             self.session.execute(text("DELETE FROM rating_scale"))
 
             # Restore rating scales first
@@ -591,13 +609,42 @@ class BackupService:
             # Restore sessions
             session_repo = SessionRepo(self.session)
             for sess_data in backup_data.get("sessions", []):
-                session_repo.create(
-                    name=sess_data["name"],
-                    assessor=sess_data.get("assessor"),
-                    organization=sess_data.get("organization"),
-                    notes=sess_data.get("notes"),
-                )
+                created_at = sess_data.get("created_at")
+                parsed_created_at = None
+                if created_at:
+                    try:
+                        parsed_created_at = datetime.fromisoformat(created_at)
+                    except ValueError:
+                        parsed_created_at = None
+                create_kwargs = {
+                    "name": sess_data["name"],
+                    "assessor": sess_data.get("assessor"),
+                    "notes": sess_data.get("notes"),
+                }
+                if parsed_created_at is not None:
+                    create_kwargs["created_at"] = parsed_created_at
+                session_repo.create(**create_kwargs)
                 stats["sessions_restored"] += 1
+
+            # Restore acronyms
+            acronym_repo = AcronymRepo(self.session)
+            for acronym_data in backup_data.get("acronyms", []):
+                created_at = acronym_data.get("created_at")
+                parsed_created_at = None
+                if created_at:
+                    try:
+                        parsed_created_at = datetime.fromisoformat(created_at)
+                    except ValueError:
+                        parsed_created_at = None
+                create_kwargs = {
+                    "acronym": acronym_data["acronym"],
+                    "full_term": acronym_data.get("full_term"),
+                    "meaning": acronym_data.get("meaning"),
+                }
+                if parsed_created_at is not None:
+                    create_kwargs["created_at"] = parsed_created_at
+                acronym_repo.create(**create_kwargs)
+                stats["acronyms_restored"] += 1
 
             # Restore entries
             entry_repo = EntryRepo(self.session)

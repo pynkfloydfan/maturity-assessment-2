@@ -4,6 +4,7 @@ import { Grid3x3Icon, ImageIcon, ListChecksIcon, SparklesIcon } from "../icons";
 import { usePageBreadcrumb } from "../context/BreadcrumbContext";
 import { useDimensions } from "../hooks/useDimensions";
 import { useThemes } from "../hooks/useThemes";
+import { useAcronymHighlighter } from "../hooks/useAcronymHighlighter";
 
 const DIMENSION_SLUGS: Record<string, string> = {
   "Governance & Leadership": "governance-leadership",
@@ -47,6 +48,7 @@ function ThemeTile({
   fallbackImage: string;
   topicCount?: number | null;
 }) {
+  const highlight = useAcronymHighlighter();
   return (
     <Link
       to={`/dimensions/${dimensionId}/themes/${themeId}/topics`}
@@ -70,9 +72,9 @@ function ThemeTile({
         </span>
       </div>
       <div className="tile-card__content">
-        <h3 className="tile-card__title">{title}</h3>
+        <h3 className="tile-card__title">{highlight(title)}</h3>
         <p className="tile-card__description line-clamp-4">
-          {description ?? "Review the topics and capture ratings for this theme."}
+          {highlight(description ?? "Review the topics and capture ratings for this theme.")}
         </p>
         <div className="tile-card__meta">
           <span className="badge-soft">
@@ -94,6 +96,7 @@ export default function ThemesPage() {
   const dimensionId = params.dimensionId ? Number.parseInt(params.dimensionId, 10) : NaN;
   const { dimensions } = useDimensions();
   const { themes, loading, error } = useThemes(Number.isNaN(dimensionId) ? null : dimensionId);
+  const highlight = useAcronymHighlighter();
 
   const dimension = dimensions.find((item) => item.id === dimensionId);
 
@@ -123,12 +126,12 @@ export default function ThemesPage() {
   return (
     <div className="page-section">
       <div className="page-hero">
-        <div className="pill">{dimension.name}</div>
+        <div className="pill">{highlight(dimension.name)}</div>
         <div>
-          <h1>{dimension.name}</h1>
-          {dimension.description && <p>{dimension.description}</p>}
+          <h1>{highlight(dimension.name)}</h1>
+          {dimension.description && <p>{highlight(dimension.description)}</p>}
           <p>
-            Each theme explores a focused capability within {dimension.name}. Choose a tile to review
+            Each theme explores a focused capability within {highlight(dimension.name)}. Choose a tile to review
             descriptive guidance and capture topic-level ratings with confidence.
           </p>
         </div>
@@ -145,7 +148,7 @@ export default function ThemesPage() {
               <Grid3x3Icon />
             </span>
             <div className="status-label">Dimension</div>
-            <div className="status-value">{dimension.name}</div>
+            <div className="status-value">{highlight(dimension.name)}</div>
           </div>
         </div>
       </div>

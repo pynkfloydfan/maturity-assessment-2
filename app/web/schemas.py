@@ -128,7 +128,6 @@ class SessionSummary(BaseModel):
     id: int
     name: str
     assessor: Optional[str] = None
-    organization: Optional[str] = None
     notes: Optional[str] = None
     created_at: datetime
 
@@ -152,15 +151,14 @@ class SessionListItem(BaseModel):
     id: int
     name: str
     assessor: Optional[str] = None
-    organization: Optional[str] = None
     created_at: datetime
 
 
 class SessionCreateRequest(BaseModel):
     name: str
     assessor: Optional[str] = None
-    organization: Optional[str] = None
     notes: Optional[str] = None
+    created_at: Optional[datetime] = None
 
 
 class SessionCombineRequest(BaseModel):
@@ -218,6 +216,13 @@ class SeedResponse(DatabaseOperationResponse):
     command: Optional[str] = None
     stdout: Optional[str] = None
     stderr: Optional[str] = None
+
+
+class AcronymResponse(BaseModel):
+    id: int
+    acronym: str
+    full_term: str
+    meaning: Optional[str] = None
 
 
 class ImportResponse(DatabaseOperationResponse):

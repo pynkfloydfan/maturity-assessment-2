@@ -35,6 +35,7 @@ from app.utils.exports import make_json_export_payload, make_xlsx_export_bytes
 from app.utils.seed import initialise_database, seed_database_from_excel
 from app.web.dependencies import get_db_config, get_db_session
 from app.web.schemas import (
+    AcronymResponse,
     AverageScore,
     DashboardData,
     DashboardFiguresResponse,
@@ -225,6 +226,12 @@ def seed_database_endpoint(
 @router.get("/health")
 async def healthcheck() -> dict[str, str]:
     return {"status": "ok"}
+
+
+@router.get("/acronyms", response_model=list[AcronymResponse])
+def list_acronyms(db: Session = Depends(get_db_session)) -> list[AcronymResponse]:
+    records = app_api.list_acronyms(db)
+    return [AcronymResponse(**record) for record in records]
 
 
 @router.get("/sessions/{session_id}/dashboard", response_model=DashboardData)
@@ -518,7 +525,6 @@ def list_sessions(db: Session = Depends(get_db_session)) -> list[SessionListItem
             id=item.id,
             name=item.name,
             assessor=item.assessor,
-            organization=item.organization,
             created_at=item.created_at,
         )
         for item in sessions
@@ -535,8 +541,8 @@ def create_session(
             db,
             name=payload.name,
             assessor=payload.assessor,
-            organization=payload.organization,
             notes=payload.notes,
+            created_at=payload.created_at,
         )
         db.commit()
         db.refresh(session_obj)
@@ -548,7 +554,6 @@ def create_session(
         id=session_obj.id,
         name=session_obj.name,
         assessor=session_obj.assessor,
-        organization=session_obj.organization,
         notes=session_obj.notes,
         created_at=session_obj.created_at,
     )
@@ -578,7 +583,6 @@ def combine_sessions(
         id=master.id,
         name=master.name,
         assessor=master.assessor,
-        organization=master.organization,
         notes=master.notes,
         created_at=master.created_at,
     )
@@ -591,7 +595,6 @@ def get_session(session_id: int, db: Session = Depends(get_db_session)) -> Sessi
         id=summary_data["id"],
         name=summary_data["name"],
         assessor=summary_data.get("assessor"),
-        organization=summary_data.get("organization"),
         notes=summary_data.get("notes"),
         created_at=summary_data["created_at"],
     )

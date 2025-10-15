@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { Grid3x3Icon, ImageIcon, ListChecksIcon, SparklesIcon } from "../icons";
 import { usePageBreadcrumb } from "../context/BreadcrumbContext";
 import { useDimensions } from "../hooks/useDimensions";
+import { useAcronymHighlighter } from "../hooks/useAcronymHighlighter";
 
 const DIMENSION_SLUGS: Record<string, string> = {
   "Governance & Leadership": "governance-leadership",
@@ -38,6 +39,7 @@ function DimensionTile({
   themeCount?: number | null;
   topicCount?: number | null;
 }) {
+  const highlight = useAcronymHighlighter();
   return (
     <Link
       to={`/dimensions/${id}/themes`}
@@ -55,9 +57,9 @@ function DimensionTile({
         />
       </div>
       <div className="tile-card__content">
-        <h3 className="tile-card__title">{title}</h3>
+        <h3 className="tile-card__title">{highlight(title)}</h3>
         <p className="tile-card__description line-clamp-4">
-          {description ?? "Explore the themes and topics captured within this dimension."}
+          {highlight(description ?? "Explore the themes and topics captured within this dimension.")}
         </p>
         <div className="tile-card__meta">
           <span className="badge-soft">

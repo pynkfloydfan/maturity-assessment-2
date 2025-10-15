@@ -1,20 +1,30 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import argparse
 import os
 import re
 import sys
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, Iterable, Tuple
+from typing import Iterable
 
 import pandas as pd
 from sqlalchemy import delete
 from sqlalchemy.orm import Session
 
+try:
+    from openpyxl import load_workbook
+    from openpyxl.utils import range_boundaries
+except ModuleNotFoundError as exc:  # pragma: no cover - dependency guard
+    raise RuntimeError(
+        "openpyxl is required to seed the dataset. Install it with 'pip install openpyxl'."
+    ) from exc
+
 from app.infrastructure.config import DatabaseConfig
 from app.infrastructure.db import make_engine_and_session
 from app.infrastructure.models import (
     Base,
+    AcronymORM,
     DimensionORM,
     ExplanationORM,
     RatingScaleORM,
@@ -23,7 +33,7 @@ from app.infrastructure.models import (
     TopicORM,
 )
 
-RatingColumn = Tuple[int, str, str]
+RatingColumn = tuple[int, str, str]
 
 
 DIMENSION_IMAGE_MAP: dict[str, str] = {
@@ -42,6 +52,8 @@ DIMENSION_IMAGE_MAP: dict[str, str] = {
 def clean_text(value: object) -> str:
     if isinstance(value, str):
         return value.strip()
+    if value is None:
+        return ""
     if pd.isna(value):
         return ""
     return str(value).strip()
@@ -50,6 +62,14 @@ def clean_text(value: object) -> str:
 def clean_optional(value: object) -> str | None:
     text = clean_text(value)
     return text or None
+
+
+def split_bullets(cell: object) -> list[str]:
+    if not isinstance(cell, str):
+        return []
+    parts = re.split(r"[\n\r]+|\u2022", cell)
+    cleaned = [p.strip(" \t-•") for p in parts if p and p.strip(" \t-•")]
+    return cleaned
 
 
 def detect_rating_columns(columns: Iterable[str]) -> list[RatingColumn]:
@@ -65,19 +85,104 @@ def detect_rating_columns(columns: Iterable[str]) -> list[RatingColumn]:
     return result
 
 
-def split_bullets(cell: object) -> list[str]:
-    if not isinstance(cell, str):
-        return []
-    parts = re.split(r"[\n\r]+|\u2022", cell)
-    cleaned = [p.strip(" \t-•") for p in parts if p and p.strip(" \t-•")]
-    return cleaned
+@dataclass(slots=True)
+class ExcelTable:
+    name: str
+    sheet: str
+    ref: str
+    dataframe: pd.DataFrame
 
 
-def load_cmmi_definitions(excel_path: Path) -> dict[int, dict[str, str | None]]:
-    df = pd.read_excel(excel_path, sheet_name="CMMI-Level-Definitions")
-    mapping: dict[int, dict[str, str | None]] = {}
+class ExcelSeedSource:
+    def __init__(self, tables: dict[str, ExcelTable]):
+        self._tables = tables
+        self._by_lower = {name.lower(): table for name, table in tables.items()}
+
+    @classmethod
+    def from_workbook(cls, excel_path: Path) -> "ExcelSeedSource":
+        workbook = load_workbook(excel_path, data_only=True)
+        tables: dict[str, ExcelTable] = {}
+        try:
+            for worksheet in workbook.worksheets:
+                for table in worksheet.tables.values():
+                    min_col, min_row, max_col, max_row = range_boundaries(table.ref)
+                    raw_rows = [
+                        list(row)
+                        for row in worksheet.iter_rows(
+                            min_row=min_row,
+                            max_row=max_row,
+                            min_col=min_col,
+                            max_col=max_col,
+                            values_only=True,
+                        )
+                    ]
+                    if not raw_rows:
+                        continue
+
+                    headers: list[str] = []
+                    for idx, cell in enumerate(raw_rows[0], start=1):
+                        header = clean_text(cell)
+                        if not header:
+                            header = f"Column{idx}"
+                        headers.append(header)
+
+                    data_rows = raw_rows[1:]
+                    dataframe = pd.DataFrame(data_rows, columns=headers)
+                    tables[table.displayName] = ExcelTable(
+                        name=table.displayName,
+                        sheet=worksheet.title,
+                        ref=table.ref,
+                        dataframe=dataframe,
+                    )
+        finally:
+            workbook.close()
+        return cls(tables)
+
+    def table_names(self) -> list[str]:
+        return sorted(self._tables.keys())
+
+    def registry(self) -> dict[str, dict[str, object]]:
+        return {
+            name: {
+                "sheet": table.sheet,
+                "ref": table.ref,
+                "rows": int(table.dataframe.shape[0]),
+                "columns": list(table.dataframe.columns),
+            }
+            for name, table in self._tables.items()
+        }
+
+    def require(self, name: str) -> ExcelTable:
+        table = self._tables.get(name)
+        if table:
+            return table
+        table = self._by_lower.get(name.lower())
+        if table:
+            return table
+        available = ", ".join(self.table_names())
+        raise KeyError(f"Table '{name}' not found in workbook. Available tables: {available}")
+
+    def require_any(self, names: Iterable[str]) -> ExcelTable:
+        for name in names:
+            table = self._tables.get(name)
+            if table:
+                return table
+            table = self._by_lower.get(name.lower())
+            if table:
+                return table
+        available = ", ".join(self.table_names())
+        raise KeyError(
+            f"None of the tables {', '.join(names)} were found in workbook. Available tables: {available}"
+        )
+
+    def optional(self, name: str) -> ExcelTable | None:
+        return self._tables.get(name) or self._by_lower.get(name.lower())
+
+
+def extract_cmmi_definitions(table: pd.DataFrame) -> dict[int, dict[str, str | None]]:
     pattern = re.compile(r"^(\d)\s*(.+)$")
-    for _, row in df.iterrows():
+    mapping: dict[int, dict[str, str | None]] = {}
+    for _, row in table.iterrows():
         raw_level = clean_text(row.get("Level"))
         if not raw_level:
             continue
@@ -93,36 +198,48 @@ def load_cmmi_definitions(excel_path: Path) -> dict[int, dict[str, str | None]]:
     return mapping
 
 
-def load_descriptive_metadata(
-    excel_path: Path,
-) -> tuple[dict[str, str | None], dict[tuple[str, str], str | None], dict[tuple[str, str, str], str | None]]:
-    df = pd.read_excel(excel_path, sheet_name="Dimension Theme Topic Descrip")
-    dimensions: dict[str, str | None] = {}
-    themes: dict[tuple[str, str], str | None] = {}
-    topics: dict[tuple[str, str, str], str | None] = {}
-
-    for _, row in df.iterrows():
+def extract_dimension_descriptions(table: pd.DataFrame) -> dict[str, str | None]:
+    mapping: dict[str, str | None] = {}
+    for _, row in table.iterrows():
         dimension = clean_text(row.get("Dimension"))
+        if not dimension:
+            continue
+        description = clean_optional(row.get("Dimension_Description"))
+        if dimension not in mapping or mapping[dimension] is None:
+            mapping[dimension] = description
+    return mapping
+
+
+def extract_theme_descriptions(table: pd.DataFrame) -> dict[str, str | None]:
+    mapping: dict[str, str | None] = {}
+    for _, row in table.iterrows():
         theme = clean_text(row.get("Theme"))
+        if not theme:
+            continue
+        description = clean_optional(row.get("Theme_Description"))
+        if theme not in mapping or mapping[theme] is None:
+            mapping[theme] = description
+    return mapping
+
+
+def extract_topic_descriptions(table: pd.DataFrame) -> dict[str, str | None]:
+    mapping: dict[str, str | None] = {}
+    for _, row in table.iterrows():
         topic = clean_text(row.get("Topic"))
-
-        if dimension and dimension not in dimensions:
-            dimensions[dimension] = clean_optional(row.get("Dimension_Description"))
-        if dimension and theme and (dimension, theme) not in themes:
-            themes[(dimension, theme)] = clean_optional(row.get("Theme_Description"))
-        if dimension and theme and topic:
-            topics[(dimension, theme, topic)] = clean_optional(row.get("Topic_Description"))
-
-    return dimensions, themes, topics
+        if not topic:
+            continue
+        description = clean_optional(row.get("Topic_Description"))
+        if topic not in mapping or mapping[topic] is None:
+            mapping[topic] = description
+    return mapping
 
 
-def load_theme_generics(
-    excel_path: Path,
+def extract_theme_generics(
+    table: pd.DataFrame,
 ) -> tuple[dict[str, str | None], dict[str, dict[int, str]]]:
-    df = pd.read_excel(excel_path, sheet_name="Theme-Level-Generic")
     categories: dict[str, str | None] = {}
     levels: dict[str, dict[int, str]] = {}
-    for _, row in df.iterrows():
+    for _, row in table.iterrows():
         theme = clean_text(row.get("Theme"))
         if not theme:
             continue
@@ -133,40 +250,44 @@ def load_theme_generics(
             text = clean_text(row.get(column))
             if text:
                 level_map[level] = text
-        levels[theme] = level_map
+        if level_map:
+            levels[theme] = level_map
     return categories, levels
 
 
-def sync_rating_scale(s: Session, rating_cols: list[RatingColumn], cmmi: dict[int, dict[str, str | None]]) -> None:
+def sync_rating_scale(
+    session: Session, rating_cols: list[RatingColumn], cmmi_info: dict[int, dict[str, str | None]]
+) -> None:
     for level, fallback_label, _ in rating_cols:
-        info = cmmi.get(level)
+        info = cmmi_info.get(level)
         label = info.get("label") if info else fallback_label
         description = info.get("description") if info else None
-        existing = s.get(RatingScaleORM, level)
+        existing = session.get(RatingScaleORM, level)
         if existing is None:
-            s.add(RatingScaleORM(level=level, label=label, description=description))
+            session.add(RatingScaleORM(level=level, label=label, description=description))
         else:
             existing.label = label
             existing.description = description
 
 
-def sync_theme_guidance(
-    s: Session, theme: ThemeORM, guidance_levels: dict[int, str]
-) -> None:
+def sync_theme_guidance(session: Session, theme: ThemeORM, guidance_levels: dict[int, str]) -> None:
     existing = {
         gl.level: gl
-        for gl in s.query(ThemeLevelGuidanceORM).filter(ThemeLevelGuidanceORM.theme_id == theme.id).all()
+        for gl in session.query(ThemeLevelGuidanceORM)
+        .filter(ThemeLevelGuidanceORM.theme_id == theme.id)
+        .all()
     }
     for level, description in guidance_levels.items():
         entry = existing.get(level)
         if entry:
             entry.description = description
         else:
-            s.add(ThemeLevelGuidanceORM(theme_id=theme.id, level=level, description=description))
-    # Remove stale levels not present anymore
+            session.add(
+                ThemeLevelGuidanceORM(theme_id=theme.id, level=level, description=description)
+            )
     stale_levels = set(existing) - set(guidance_levels)
     if stale_levels:
-        s.execute(
+        session.execute(
             delete(ThemeLevelGuidanceORM).where(
                 ThemeLevelGuidanceORM.theme_id == theme.id,
                 ThemeLevelGuidanceORM.level.in_(list(stale_levels)),
@@ -174,105 +295,146 @@ def sync_theme_guidance(
         )
 
 
-def seed_from_excel(s: Session, excel_path: Path) -> None:
-    framework_df = pd.read_excel(excel_path, sheet_name="Enhanced Framework")
-    required = {"Dimension", "Theme", "Topic"}
-    missing = required - set(framework_df.columns)
-    if missing:
-        raise RuntimeError(f"Missing required columns: {missing}")
+def seed_acronyms(session: Session, table: pd.DataFrame) -> None:
+    session.execute(delete(AcronymORM))
+    for _, row in table.iterrows():
+        acronym = clean_text(row.get("Acronym"))
+        full_term = clean_text(row.get("Full term"))
+        if not acronym or not full_term:
+            continue
+        meaning = clean_optional(row.get("Meaning / Why it matters in this framework"))
+        session.add(
+            AcronymORM(
+                acronym=acronym,
+                full_term=full_term,
+                meaning=meaning,
+            )
+        )
 
-    cmmi_defs = load_cmmi_definitions(excel_path)
-    dim_descriptions, theme_descriptions, topic_descriptions = load_descriptive_metadata(excel_path)
-    theme_categories, theme_generic_levels = load_theme_generics(excel_path)
 
-    rating_cols = detect_rating_columns(list(framework_df.columns))
-    sync_rating_scale(s, rating_cols, cmmi_defs)
+def seed_from_excel(session: Session, excel_path: Path) -> ExcelSeedSource:
+    source = ExcelSeedSource.from_workbook(excel_path)
 
-    dim_cache: dict[str, int] = {}
+    print("Discovered tables:")
+    for name in source.table_names():
+        entry = source.registry()[name]
+        sheet = entry["sheet"]
+        ref = entry["ref"]
+        rows = entry["rows"]
+        print(f" - {name}: sheet '{sheet}', range {ref}, rows={rows}")
+
+    framework_df = source.require("Framework").dataframe
+    cmmi_table = source.require_any(["CMM_definitions", "CMMI_definitions"]).dataframe
+    dimension_desc_table = source.require("dimension_desc").dataframe
+    theme_desc_table = source.require("theme_desc").dataframe
+    topic_desc_table = source.require("topic_desc").dataframe
+    theme_generic_table = source.require("theme_generic").dataframe
+
+    cmmi_definitions = extract_cmmi_definitions(cmmi_table)
+    dimension_descriptions = extract_dimension_descriptions(dimension_desc_table)
+    theme_descriptions = extract_theme_descriptions(theme_desc_table)
+    topic_descriptions = extract_topic_descriptions(topic_desc_table)
+    theme_categories, theme_generic_levels = extract_theme_generics(theme_generic_table)
+
+    rating_columns = detect_rating_columns(framework_df.columns)
+    if not rating_columns:
+        raise RuntimeError("No rating scale columns detected in the Framework table.")
+    sync_rating_scale(session, rating_columns, cmmi_definitions)
+
+    dimension_cache: dict[str, int] = {}
     theme_cache: dict[tuple[int, str], int] = {}
     processed_topics: set[int] = set()
     processed_themes: set[int] = set()
 
     for _, row in framework_df.iterrows():
-        dimension_name = clean_text(row["Dimension"])
-        theme_name = clean_text(row["Theme"])
-        topic_name = clean_text(row["Topic"])
+        dimension_name = clean_text(row.get("Dimension"))
+        theme_name = clean_text(row.get("Theme"))
+        topic_name = clean_text(row.get("Topic"))
 
         if not (dimension_name and theme_name and topic_name):
             continue
 
-        dim_id = dim_cache.get(dimension_name)
-        if dim_id is None:
-            dimension = s.query(DimensionORM).filter_by(name=dimension_name).one_or_none()
+        dimension_id = dimension_cache.get(dimension_name)
+        if dimension_id is None:
+            dimension = (
+                session.query(DimensionORM).filter_by(name=dimension_name).one_or_none()
+            )
             if dimension is None:
                 dimension = DimensionORM(name=dimension_name)
-                s.add(dimension)
-                s.flush()
-            dimension.description = dim_descriptions.get(dimension_name)
+                session.add(dimension)
+                session.flush()
+            dimension.description = dimension_descriptions.get(dimension_name)
             if dimension.image_filename is None:
                 dimension.image_filename = DIMENSION_IMAGE_MAP.get(dimension_name)
             if dimension.image_alt is None:
                 dimension.image_alt = dimension_name or None
-            dim_cache[dimension_name] = dimension.id
-            dim_id = dimension.id
+            dimension_cache[dimension_name] = dimension.id
+            dimension_id = dimension.id
         else:
-            dimension = s.get(DimensionORM, dim_id)
-            if dimension and dimension.description is None:
-                dimension.description = dim_descriptions.get(dimension_name)
-            if dimension and dimension.image_filename is None:
-                dimension.image_filename = DIMENSION_IMAGE_MAP.get(dimension_name)
-            if dimension and dimension.image_alt is None:
-                dimension.image_alt = dimension_name or None
+            dimension = session.get(DimensionORM, dimension_id)
+            if dimension:
+                if dimension.description is None:
+                    dimension.description = dimension_descriptions.get(dimension_name)
+                if dimension.image_filename is None:
+                    dimension.image_filename = DIMENSION_IMAGE_MAP.get(dimension_name)
+                if dimension.image_alt is None:
+                    dimension.image_alt = dimension_name or None
 
-        theme_key = (dim_id, theme_name)
+        theme_key = (dimension_id, theme_name)
         theme_id = theme_cache.get(theme_key)
         if theme_id is None:
             theme = (
-                s.query(ThemeORM)
-                .filter_by(dimension_id=dim_id, name=theme_name)
+                session.query(ThemeORM)
+                .filter_by(dimension_id=dimension_id, name=theme_name)
                 .one_or_none()
             )
             if theme is None:
-                theme = ThemeORM(dimension_id=dim_id, name=theme_name)
-                s.add(theme)
-                s.flush()
-            theme.description = theme_descriptions.get((dimension_name, theme_name))
+                theme = ThemeORM(dimension_id=dimension_id, name=theme_name)
+                session.add(theme)
+                session.flush()
+            theme.description = theme_descriptions.get(theme_name)
             theme.category = theme_categories.get(theme_name)
             theme_cache[theme_key] = theme.id
             theme_id = theme.id
         else:
-            theme = s.get(ThemeORM, theme_id)
+            theme = session.get(ThemeORM, theme_id)
             if theme:
                 if theme.description is None:
-                    theme.description = theme_descriptions.get((dimension_name, theme_name))
+                    theme.description = theme_descriptions.get(theme_name)
                 if theme.category is None:
                     theme.category = theme_categories.get(theme_name)
 
         if theme and theme.id not in processed_themes:
-            levels = theme_generic_levels.get(theme_name, {})
-            if levels:
-                sync_theme_guidance(s, theme, levels)
+            guidance_levels = theme_generic_levels.get(theme_name)
+            if guidance_levels:
+                sync_theme_guidance(session, theme, guidance_levels)
             processed_themes.add(theme.id)
 
         topic = (
-            s.query(TopicORM)
+            session.query(TopicORM)
             .filter_by(theme_id=theme_id, name=topic_name)
             .one_or_none()
         )
         if topic is None:
             topic = TopicORM(theme_id=theme_id, name=topic_name)
-            s.add(topic)
-            s.flush()
-        topic.description = topic_descriptions.get((dimension_name, theme_name, topic_name))
+            session.add(topic)
+            session.flush()
+        topic.description = topic_descriptions.get(topic_name)
 
         if topic.id not in processed_topics:
-            s.execute(delete(ExplanationORM).where(ExplanationORM.topic_id == topic.id))
+            session.execute(delete(ExplanationORM).where(ExplanationORM.topic_id == topic.id))
             processed_topics.add(topic.id)
 
-        for level, _label, column in rating_cols:
+        for level, _label, column in rating_columns:
             bullets = split_bullets(row.get(column))
             for bullet in bullets:
-                s.add(ExplanationORM(topic_id=topic.id, level=level, text=bullet))
+                session.add(ExplanationORM(topic_id=topic.id, level=level, text=bullet))
+
+    acronyms_table = source.optional("Acronyms")
+    if acronyms_table is not None:
+        seed_acronyms(session, acronyms_table.dataframe)
+
+    return source
 
 
 def main() -> None:
@@ -303,7 +465,7 @@ def main() -> None:
     parser.add_argument("--mysql-database", "--mysql-db", dest="mysql_database", default=mysql_database_default)
     parser.add_argument(
         "--excel-path",
-        default="app/source_data/enhanced_operational_resilience_maturity_v6.xlsx",
+        default="app/source_data/Enhanced_Operational_Resilience_Maturity_v6.xlsx",
     )
     args = parser.parse_args()
 
@@ -334,4 +496,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-
