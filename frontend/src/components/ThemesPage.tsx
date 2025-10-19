@@ -168,8 +168,8 @@ export default function ThemesPage() {
         {themes.map((theme) => {
           const dimensionSlug = DIMENSION_SLUGS[dimension.name] ?? slugify(dimension.name);
           const themeSlug = slugify(theme.name);
-          const themeImage = `/static/images/themes/${dimensionSlug}/${themeSlug}.png`;
-          const fallbackImage = `/static/images/dimensions/${dimensionSlug}.png`;
+          const themeImage = `/static/images/themes/${dimensionSlug}/${themeSlug}.jpg`;
+          const fallbackImage = `/static/images/dimensions/${dimensionSlug}.jpg`;
 
           return (
             <ThemeTile

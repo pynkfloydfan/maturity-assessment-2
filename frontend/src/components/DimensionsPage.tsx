@@ -21,7 +21,7 @@ const DIMENSION_PLACEHOLDER = "/static/images/dimensions/default.png";
 
 function makeDimensionImagePath(name: string): string {
   const slug = DIMENSION_SLUGS[name] ?? name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
-  return `/static/images/dimensions/${slug}.png`;
+  return `/static/images/dimensions/${slug}.jpg`;
 }
 
 function DimensionTile({

@@ -37,15 +37,15 @@ RatingColumn = tuple[int, str, str]
 
 
 DIMENSION_IMAGE_MAP: dict[str, str] = {
-    "Governance & Leadership": "governance-leadership.png",
-    "Risk Assessment & Management": "risk-assessment-management.png",
-    "BC & DR Planning": "bc-dr-planning.png",
-    "Process & Dependency Mapping": "process-dependency-mapping.png",
-    "IT & Cyber Resilience": "it-cyber-resilience.png",
-    "Crisis Comms & Incident Mgmt": "crisis-comms-incident-mgmt.png",
-    "Third-Party Resilience": "third-party-resilience.png",
-    "Culture & Human Factors": "culture-human-factors.png",
-    "Regulatory Compliance & Resolvability": "regulatory-compliance-resolvability.png",
+    "Governance & Leadership": "governance-leadership.jpg",
+    "Risk Assessment & Management": "risk-assessment-management.jpg",
+    "BC & DR Planning": "bc-dr-planning.jpg",
+    "Process & Dependency Mapping": "process-dependency-mapping.jpg",
+    "IT & Cyber Resilience": "it-cyber-resilience.jpg",
+    "Crisis Comms & Incident Mgmt": "crisis-comms-incident-mgmt.jpg",
+    "Third-Party Resilience": "third-party-resilience.jpg",
+    "Culture & Human Factors": "culture-human-factors.jpg",
+    "Regulatory Compliance & Resolvability": "regulatory-compliance-resolvability.jpg",
 }
 
 

@@ -5,6 +5,14 @@ React/Vite front end. The app lets assessors capture CMMI 1–5 topic ratings,
 review guidance, and surface dashboards backed by a SQL database (SQLite or
 MySQL).
 
+## Highlights
+
+- Session management now captures a `created_at` date (with default-today picker).
+- Topic pages guard against losing work with an unsaved-changes confirmation modal.
+- Acronyms from the seed spreadsheet render with dotted-underlined tooltips across the UI.
+- Excel-driven seeding ingests all workbook tables (including acronyms) via a single command.
+- Plotly radar + tiles are served as JSON from FastAPI and rendered client-side.
+
 ## Stack
 
 - Python 3.10+
@@ -12,20 +20,26 @@ MySQL).
 - React 18 + Vite build (frontend bundle)
 - SQLAlchemy ORM + Alembic migrations
 - SQLite (default) or MySQL 5.6+ via PyMySQL driver
-- Plotly for charts (JSON payloads rendered client-side – coming in Step 6)
+- Plotly for charts (JSON payloads rendered client-side)
 
 ## Project layout
 
 ```
 app/
-  web/                 # FastAPI application, routes, asset helpers
-  infrastructure/      # configuration, database models & repositories
-  application/         # domain-facing API facade
-  source_data/         # enhanced spreadsheet source of truth
-frontend/              # React + Vite workspace (Figma-derived components)
-new-ui-plan/           # migration plan & notes
-scripts/run_server.py  # helper to build frontend & launch FastAPI
-scripts/seed_dataset.py
+  application/         # service layer orchestrating repositories and domain models
+  domain/              # dataclasses, validation schemas, and core business rules
+  infrastructure/      # config, SQLAlchemy models, repositories, logging
+  utils/               # backup/restore utilities and shared helpers
+  web/                 # FastAPI entrypoint, routers, schemas, static asset glue
+  source_data/         # enhanced operational resilience spreadsheet source
+frontend/
+  src/                 # React/Vite app (components, contexts, hooks, styling)
+  package.json         # JavaScript workspace manifest
+alembic/               # database migrations managed via Alembic
+scripts/               # CLI helpers (`run_server.py`, `seed_dataset.py`, etc.)
+tests/                 # pytest suite covering validation, repos, and API flows
+new-ui-plan/           # design documentation and modernisation checklist
+logs/                  # runtime/server logs created by helper scripts
 ```
 
 The legacy Streamlit prototype has been removed; FastAPI + React is now the canonical flow.
@@ -78,6 +92,10 @@ poetry run seed-database \
   --excel-path app/source_data/enhanced_operational_resilience_maturity_v6.xlsx
 ```
 
+The seeding script inventories the workbook tables up front (printing sheet names
+and ranges), then populates dimensions, themes, topics, explanations, theme-level
+guidance, rating scales, and the new acronyms lookup powering UI tooltips.
+
 ### 4. Build the frontend (Node/Vite)
 
 > Prerequisite: [Node.js](https://nodejs.org/) 18+ (ships with `npm`). Install it
@@ -93,6 +111,8 @@ If `npm install` surfaces a low-severity vulnerability you can inspect it with
 `npm audit`; it does not block the build.
 
 Re-run `npm run build` whenever you change files under `frontend/`.
+For iterative work you can also run `npm run dev` in parallel (or rely on
+`poetry run server`, which triggers builds automatically when artefacts are missing).
 
 ### 5. Launch the application (one Poetry command)
 
@@ -124,6 +144,10 @@ poetry run uvicorn app.web.main:app --reload
   `alembic/versions/`).
 - **Settings page** → the React UI now exposes database configuration, seeding,
   and session management under `/settings`.
+- **Topic navigation** → any unsaved rating/comment changes prompt a modal
+  (“Save changes” / “Don’t save changes”) if you navigate away.
+- **Acronym hover states** → seeded acronyms render with a dotted underline and
+  tooltip, so verify hover text when you introduce new abbreviations via the spreadsheet.
 
 ## Deployment notes & follow-up ideas
 
@@ -191,11 +215,11 @@ Perform these steps whenever you want a quick end-to-end verification:
 
 - **Golden source** – Runtime card art is served from
   `app/web/static/images/dimensions/` and
-  `app/web/static/images/themes/<dimension>/<theme>.png`. Replace those `.png`
-  files (e.g. `governance-leadership.png`) with your own artwork and rerun
+  `app/web/static/images/themes/<dimension>/<theme>.jpg`. Replace those `.jpg`
+  files (e.g. `governance-leadership.jpg`) with your own artwork and rerun
   `npm run build` (or `poetry run server`, which triggers a build if required).
 - Theme cards fall back to their parent dimension image when a
-  `themes/<dimension>/<theme>.png` variant is not provided.
+  `themes/<dimension>/<theme>.jpg` variant is not provided.
 - Colour tokens (CSS variables beginning with `--color-`) live near the top of
   `frontend/src/index.css`. Adjust these to personalise the palette and typography.
 
@@ -210,13 +234,10 @@ Perform these steps whenever you want a quick end-to-end verification:
 
 ## Next steps
 
-See `new-ui-plan/steps.md` for the remaining migration milestones:
-
-- Step 6: Plotly JSON hand-off & dashboard integration
-- Step 7: React settings/admin experience
-- Step 8: Static asset tidy-up & Docker guidance
-- Step 9: Expanded automated tests
-- Step 10: Documentation refresh & legacy Streamlit relocation
+- Address the remaining design deliverables in `new-ui-plan/design-enhancements.md`:
+  - Documentation refresh & ongoing design notes (README/forums)
+  - Visual polish (hover states, shadows, badge styling refinements)
+  - Evaluate adding optional new icons/illustrations once assets are selected
 
 ## Questions or issues?
 
