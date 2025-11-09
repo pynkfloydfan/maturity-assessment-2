@@ -145,22 +145,33 @@ class AssessmentEntryORM(Base):
     topic_id: Mapped[int] = mapped_column(
         ForeignKey("topics.id", ondelete="CASCADE"), nullable=False, index=True
     )
-    rating_level: Mapped[int | None] = mapped_column(
+    current_maturity: Mapped[int | None] = mapped_column(
+        ForeignKey("rating_scale.level", ondelete="RESTRICT"), nullable=True
+    )
+    desired_maturity: Mapped[int | None] = mapped_column(
         ForeignKey("rating_scale.level", ondelete="RESTRICT"), nullable=True
     )
     computed_score: Mapped[float | None] = mapped_column(
         Numeric(3, 2), nullable=True
     )  # supports decimal scores (0.00..5.00)
-    is_na: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    current_is_na: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    desired_is_na: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     comment: Mapped[str | None] = mapped_column(Text, nullable=True)
+    evidence_links: Mapped[str | None] = mapped_column(Text, nullable=True)
+    progress_state: Mapped[str] = mapped_column(String(32), default="not_started", nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=False), default=datetime.utcnow, nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=False), default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False
     )
 
     __table_args__ = (
         UniqueConstraint("session_id", "topic_id", name="uq_session_topic"),
         CheckConstraint(
-            "(rating_level IS NULL OR (rating_level BETWEEN 1 AND 5)) AND (computed_score IS NULL OR (computed_score >= 0 AND computed_score <= 5))",
+            "(current_maturity IS NULL OR (current_maturity BETWEEN 1 AND 5)) "
+            "AND (desired_maturity IS NULL OR (desired_maturity BETWEEN 1 AND 5)) "
+            "AND (computed_score IS NULL OR (computed_score >= 0 AND computed_score <= 5))",
             name="ck_entry_scores",
         ),
     )

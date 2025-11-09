@@ -22,7 +22,7 @@ import {
 } from "../icons";
 
 const DEFAULT_SQLITE_PATH = "./resilience.db";
-const DEFAULT_EXCEL_PATH = "app/source_data/enhanced_operational_resilience_maturity_v6.xlsx";
+const DEFAULT_EXCEL_PATH = "app/source_data/Maturity_Assessment_Data.xlsx";
 
 type Feedback = { type: "success" | "error"; message: string } | null;
 
@@ -307,22 +307,28 @@ export default function SettingsPage() {
             <span className="status-item__icon">
               <DatabaseIcon />
             </span>
-            <div className="status-label">Database backend</div>
-            <div className="status-value">{dbForm.backend === "mysql" ? "MySQL" : "SQLite"}</div>
+            <div className="status-item__body">
+              <div className="status-label">Database backend</div>
+              <div className="status-value">{dbForm.backend === "mysql" ? "MySQL" : "SQLite"}</div>
+            </div>
           </div>
           <div className="status-item">
             <span className="status-item__icon">
               <UsersIcon />
             </span>
-            <div className="status-label">Sessions available</div>
-            <div className="status-value">{sessions.length}</div>
+            <div className="status-item__body">
+              <div className="status-label">Sessions available</div>
+              <div className="status-value">{sessions.length}</div>
+            </div>
           </div>
           <div className="status-item">
             <span className="status-item__icon">
               <FileSpreadsheetIcon />
             </span>
-            <div className="status-label">Spreadsheet source</div>
-            <div className="status-value">{excelPath ? "Configured" : "Not set"}</div>
+            <div className="status-item__body">
+              <div className="status-label">Spreadsheet source</div>
+              <div className="status-value">{excelPath ? "Configured" : "Not set"}</div>
+            </div>
           </div>
         </div>
       </div>

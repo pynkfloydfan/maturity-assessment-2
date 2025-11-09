@@ -54,10 +54,12 @@
             "@types/plotly.js": "^2.12.30",
             "@types/react": "^19.1.13",
             "@vitejs/plugin-react-swc": "^3.10.2",
-            "vite": "6.3.5"
+            "vite": "6.3.5",
+            "vitest": "^4.0.8"
       },
       "scripts": {
             "dev": "vite",
-            "build": "vite build"
+            "build": "vite build",
+            "test": "vitest run"
       }
 }

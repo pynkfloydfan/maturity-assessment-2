@@ -177,13 +177,13 @@ class RatingError(ResilienceAssessmentError):
     def __init__(
         self,
         message: str,
-        rating_level: int | None = None,
+        current_maturity: int | None = None,
         details: dict[str, Any] | None = None,
     ):
-        self.rating_level = rating_level
+        self.current_maturity = current_maturity
         super().__init__(
             message=message,
-            details=details or {"rating_level": rating_level},
+            details=details or {"current_maturity": current_maturity},
             user_message="Rating error occurred. Please check your rating and try again.",
         )
 
@@ -191,10 +191,10 @@ class RatingError(ResilienceAssessmentError):
 class InvalidRatingError(RatingError):
     """Raised when an invalid rating is provided."""
 
-    def __init__(self, rating_level: Any):
+    def __init__(self, maturity_level: Any):
         super().__init__(
-            message=f"Invalid rating level: {rating_level}. Must be between 1-5 or N/A",
-            rating_level=rating_level,
+            message=f"Invalid maturity level: {maturity_level}. Must be between 1-5 or N/A",
+            current_maturity=maturity_level,
         )
 
     def _get_default_user_message(self) -> str:

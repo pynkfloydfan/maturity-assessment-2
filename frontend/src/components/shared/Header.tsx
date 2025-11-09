@@ -1,7 +1,6 @@
 import { ChangeEvent, useMemo } from "react";
 import { Link, NavLink } from "react-router-dom";
 import avatarImage from "../../assets/user-avatar.png";
-import { LifeBuoyIcon } from "../../icons";
 import Breadcrumb from "./Breadcrumb";
 import { useSessionContext } from "../../context/SessionContext";
 import { useBreadcrumbContext } from "../../context/BreadcrumbContext";
@@ -17,6 +16,8 @@ function HeaderIcon() {
 export default function Header() {
   const { sessions, activeSessionId, selectSession, loading, error } = useSessionContext();
   const { items: breadcrumbItems } = useBreadcrumbContext();
+  const statusText = error ? "Needs attention" : loading ? "Loading…" : "Ready";
+  const statusState = error ? "status-chip--error" : loading ? "status-chip--loading" : "status-chip--ready";
 
   const navLinks = useMemo(
     () => [
@@ -37,8 +38,6 @@ export default function Header() {
     selectSession(Number.parseInt(value, 10));
   };
 
-  const activeSession = sessions.find((session) => session.id === activeSessionId);
-
   return (
     <header className="app-header">
       <div className="app-container header-bar">
@@ -52,15 +51,28 @@ export default function Header() {
           </div>
         </div>
 
-        <nav className="nav-links">
-          {navLinks.map((link) => (
-            <NavLink key={link.to} to={link.to} className={({ isActive }) => `nav-link${isActive ? " active" : ""}`}>
-              {link.label}
-            </NavLink>
-          ))}
-        </nav>
+        <div className="header-nav-stack">
+          <nav className="nav-links">
+            {navLinks.map((link) => (
+              <NavLink key={link.to} to={link.to} className={({ isActive }) => `nav-link${isActive ? " active" : ""}`}>
+                {link.label}
+              </NavLink>
+            ))}
+          </nav>
+          {breadcrumbItems.length > 0 && (
+            <div className="header-inline-breadcrumb">
+              <Breadcrumb items={breadcrumbItems} />
+            </div>
+          )}
+        </div>
 
         <div className="header-actions">
+          <div className="session-select status-display">
+            <label htmlFor="status-indicator">Status</label>
+            <div id="status-indicator" className={`status-chip ${statusState}`} role="status" aria-live="polite">
+              {statusText}
+            </div>
+          </div>
           <div className="session-select">
             <label htmlFor="session-picker">Active session</label>
             <select
@@ -80,34 +92,8 @@ export default function Header() {
               )}
             </select>
           </div>
-          <button type="button" className="btn-secondary">
-            <LifeBuoyIcon />
-            Support
-          </button>
           <div className="avatar-frame">
             <img src={avatarImage} alt="User" className="h-full w-full object-cover" />
-          </div>
-        </div>
-      </div>
-
-      <div className="header-sub">
-        {breadcrumbItems.length > 0 && (
-          <div className="app-container header-breadcrumb">
-            <Breadcrumb items={breadcrumbItems} />
-          </div>
-        )}
-        <div className="app-container header-metrics">
-          <div className="metric-chip">
-            <div className="metric-label">Active session</div>
-            <div className="metric-value">{activeSession ? activeSession.name : "None selected"}</div>
-          </div>
-          <div className="metric-chip">
-            <div className="metric-label">Sessions available</div>
-            <div className="metric-value">{sessions.length}</div>
-          </div>
-          <div className="metric-chip">
-            <div className="metric-label">Status</div>
-            <div className="metric-value">{loading ? "Loading…" : "Ready"}</div>
           </div>
         </div>
       </div>

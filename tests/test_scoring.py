@@ -44,8 +44,22 @@ def seed_minimal(s):
     s.flush()
     s.add_all(
         [
-            AssessmentEntryORM(session_id=sess.id, topic_id=t1.id, rating_level=3, is_na=False),
-            AssessmentEntryORM(session_id=sess.id, topic_id=t2.id, rating_level=5, is_na=False),
+            AssessmentEntryORM(
+                session_id=sess.id,
+                topic_id=t1.id,
+                current_maturity=3,
+                desired_maturity=3,
+                current_is_na=False,
+                desired_is_na=False,
+            ),
+            AssessmentEntryORM(
+                session_id=sess.id,
+                topic_id=t2.id,
+                current_maturity=5,
+                desired_maturity=5,
+                current_is_na=False,
+                desired_is_na=False,
+            ),
         ]
     )
     return sess.id
@@ -94,8 +108,15 @@ def test_scoring_prefers_computed_score():
         sess = AssessmentSessionORM(name="S1")
         s.add(sess)
         s.flush()
-        # entry with rating_level but also computed_score override
-        e = AssessmentEntryORM(session_id=sess.id, topic_id=t.id, rating_level=2, is_na=False)
+        # entry with current_maturity but also computed_score override
+        e = AssessmentEntryORM(
+            session_id=sess.id,
+            topic_id=t.id,
+            current_maturity=2,
+            desired_maturity=2,
+            current_is_na=False,
+            desired_is_na=False,
+        )
         e.computed_score = 4.25
         s.add(e)
         s.flush()

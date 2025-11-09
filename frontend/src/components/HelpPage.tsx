@@ -33,7 +33,7 @@ const sections: HelpSection[] = [
           <strong>Initialise the schema:</strong> click <em>Initialise tables</em> or run {' '}<code>poetry run alembic upgrade head</code> to apply migrations.
         </li>
         <li>
-          <strong>Seed the enhanced dataset:</strong> trigger seeding from Settings or run {' '}<code>poetry run seed-database</code> (defaults to {' '}<code>app/source_data/enhanced_operational_resilience_maturity_v6.xlsx</code>).
+          <strong>Seed the enhanced dataset:</strong> trigger seeding from Settings or run {' '}<code>poetry run seed-database</code> (defaults to {' '}<code>app/source_data/Maturity_Assessment_Data.xlsx</code>).
         </li>
         <li>
           <strong>Create a session:</strong> add at least one session in Settings so dashboards have
@@ -201,7 +201,7 @@ const sections: HelpSection[] = [
     content: (
       <ul className="help-list">
         <li>
-          The canonical workbook is <code>app/source_data/enhanced_operational_resilience_maturity_v6.xlsx</code>.
+          The canonical workbook is <code>app/source_data/Maturity_Assessment_Data.xlsx</code>.
         </li>
         <li>
           Seeding populates dimensions, themes, topics, rating scales, guidance, and explanations (see {' '}<code>scripts/seed_dataset.py</code>).

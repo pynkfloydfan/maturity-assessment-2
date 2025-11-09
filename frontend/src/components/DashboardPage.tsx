@@ -30,7 +30,7 @@ function Tile({ tile }: { tile: DashboardTile }) {
       className="heatmap-tile flex min-w-[180px] flex-col gap-2 rounded-xl border-3 border-[#e1e6ef] bg-white p-4 shadow-sm"
       style={tile.color ? { borderColor: tile.color } : undefined}
     >
-      <span className="text-sm font-medium text-[#61758a]">{tile.name}</span>
+      <span className="text-base font-semibold text-[#61758a]">{tile.name}</span>
       <div className="flex items-baseline gap-2">
         <span className="text-3xl font-semibold text-[#121417]">{average}</span>
         {coverage !== null && <span className="text-xs text-[#61758a]">coverage {coverage}%</span>}

@@ -465,7 +465,7 @@ def main() -> None:
     parser.add_argument("--mysql-database", "--mysql-db", dest="mysql_database", default=mysql_database_default)
     parser.add_argument(
         "--excel-path",
-        default="app/source_data/Enhanced_Operational_Resilience_Maturity_v6.xlsx",
+        default="app/source_data/Maturity_Assessment_Data.xlsx",
     )
     args = parser.parse_args()
 

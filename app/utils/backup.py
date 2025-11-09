@@ -454,18 +454,35 @@ class BackupService:
             for sess in sessions:
                 entries = entry_repo.list_for_session(sess.id)
                 for entry in entries:
+                    evidence = None
+                    if entry.evidence_links:
+                        try:
+                            parsed = json.loads(entry.evidence_links)
+                            if isinstance(parsed, list):
+                                evidence = [str(item) for item in parsed if str(item).strip()]
+                            elif parsed is not None:
+                                evidence = [str(parsed)]
+                        except json.JSONDecodeError:
+                            evidence = [entry.evidence_links]
                     all_entries.append(
                         {
                             "id": entry.id,
                             "session_id": entry.session_id,
                             "topic_id": entry.topic_id,
-                            "rating_level": entry.rating_level,
+                            "current_maturity": entry.current_maturity,
+                            "desired_maturity": entry.desired_maturity,
+                            "rating_level": entry.current_maturity,
                             "computed_score": (
                                 float(entry.computed_score) if entry.computed_score else None
                             ),
-                            "is_na": entry.is_na,
+                            "current_is_na": entry.current_is_na,
+                            "desired_is_na": entry.desired_is_na,
+                            "is_na": entry.current_is_na,
                             "comment": entry.comment,
+                            "evidence_links": evidence,
+                            "progress_state": entry.progress_state,
                             "created_at": entry.created_at.isoformat(),
+                            "updated_at": entry.updated_at.isoformat(),
                         }
                     )
             data["entries"] = all_entries
@@ -655,13 +672,48 @@ class BackupService:
 
                     computed_score = Decimal(str(entry_data["computed_score"]))
 
+                current_is_na = entry_data.get("current_is_na")
+                if current_is_na is None:
+                    current_is_na = entry_data.get("is_na", False)
+
+                desired_is_na = entry_data.get("desired_is_na")
+                if desired_is_na is None:
+                    desired_is_na = current_is_na
+
+                current_maturity = entry_data.get("current_maturity")
+                if current_maturity is None:
+                    current_maturity = entry_data.get("rating_level")
+
+                desired_maturity = entry_data.get("desired_maturity")
+                if desired_maturity is None and not desired_is_na:
+                    desired_maturity = current_maturity
+
+                evidence_links = entry_data.get("evidence_links")
+                if isinstance(evidence_links, str) and evidence_links:
+                    try:
+                        parsed = json.loads(evidence_links)
+                        if isinstance(parsed, list):
+                            evidence_links = [str(item) for item in parsed if str(item).strip()]
+                        elif parsed is not None:
+                            evidence_links = [str(parsed)]
+                        else:
+                            evidence_links = None
+                    except json.JSONDecodeError:
+                        evidence_links = [item for item in evidence_links.splitlines() if item.strip()]
+                elif isinstance(evidence_links, list):
+                    evidence_links = [str(item) for item in evidence_links if str(item).strip()] or None
+
                 entry_repo.upsert(
                     session_id=entry_data["session_id"],
                     topic_id=entry_data["topic_id"],
-                    rating_level=entry_data.get("rating_level"),
+                    current_maturity=current_maturity,
+                    desired_maturity=desired_maturity,
                     computed_score=computed_score,
-                    is_na=entry_data.get("is_na", False),
+                    current_is_na=current_is_na,
+                    desired_is_na=desired_is_na,
                     comment=entry_data.get("comment"),
+                    evidence_links=evidence_links,
+                    progress_state=entry_data.get("progress_state", "not_started"),
                 )
                 stats["entries_restored"] += 1
 

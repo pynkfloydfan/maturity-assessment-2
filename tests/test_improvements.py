@@ -73,8 +73,10 @@ class TestPydanticValidation:
             {
                 "session_id": 1,
                 "topic_id": 123,
-                "rating_level": 3,
-                "is_na": False,
+                "current_maturity": 3,
+                "desired_maturity": 4,
+                "current_is_na": False,
+                "desired_is_na": False,
                 "comment": "Good practices in place",
             },
         )
@@ -82,18 +84,22 @@ class TestPydanticValidation:
         assert result.success is True
         assert result.data is not None
         data = result.data
-        assert data["rating_level"] == 3
-        assert data["is_na"] is False
+        assert data["current_maturity"] == 3
+        assert data["desired_maturity"] == 4
+        assert data["current_is_na"] is False
+        assert data["desired_is_na"] is False
 
     def test_assessment_entry_validation_na_consistency(self):
-        """Test that is_na and rating_level are mutually exclusive."""
+        """Test NA validation rules for dual maturity ratings."""
         result = validate_input(
             AssessmentEntryInput,
             {
                 "session_id": 1,
                 "topic_id": 123,
-                "rating_level": 3,
-                "is_na": True,  # Invalid: both rating and N/A
+                "current_maturity": None,
+                "desired_maturity": 3,
+                "current_is_na": True,
+                "desired_is_na": False,  # Invalid: desired must be N/A when current is N/A
             },
         )
 

@@ -21,7 +21,6 @@ export { Gauge as GaugeIcon } from "lucide-react";
 export { Grid3x3 as Grid3x3Icon } from "lucide-react";
 export { History as HistoryIcon } from "lucide-react";
 export { Image as ImageIcon } from "lucide-react";
-export { LifeBuoy as LifeBuoyIcon } from "lucide-react";
 export { ListChecks as ListChecksIcon } from "lucide-react";
 export { Palette as PaletteIcon } from "lucide-react";
 export { Save as SaveIcon } from "lucide-react";

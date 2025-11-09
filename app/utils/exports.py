@@ -32,7 +32,21 @@ def make_xlsx_export_bytes(topics_df: pd.DataFrame, entries_df: pd.DataFrame) ->
     if topics_df is None:
         topics_df = pd.DataFrame(columns=["Dimension", "Theme", "TopicID", "Topic"])
     if entries_df is None:
-        entries_df = pd.DataFrame(columns=["TopicID", "Rating", "ComputedScore", "N/A", "Comment", "CreatedAt"])
+        entries_df = pd.DataFrame(
+            columns=[
+                "TopicID",
+                "CurrentMaturity",
+                "DesiredMaturity",
+                "ComputedScore",
+                "CurrentNA",
+                "DesiredNA",
+                "Comment",
+                "EvidenceLinks",
+                "ProgressState",
+                "CreatedAt",
+                "UpdatedAt",
+            ]
+        )
 
     # Ensure both frames share consistent structure before merging
     topics_df = topics_df.copy()
@@ -46,11 +60,16 @@ def make_xlsx_export_bytes(topics_df: pd.DataFrame, entries_df: pd.DataFrame) ->
         "Theme",
         "TopicID",
         "Topic",
-        "Rating",
+        "CurrentMaturity",
+        "DesiredMaturity",
         "ComputedScore",
-        "N/A",
+        "CurrentNA",
+        "DesiredNA",
         "Comment",
+        "EvidenceLinks",
+        "ProgressState",
         "CreatedAt",
+        "UpdatedAt",
     ]
 
     for column in ordered_columns:

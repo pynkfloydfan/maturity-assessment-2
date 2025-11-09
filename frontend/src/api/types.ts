@@ -28,6 +28,8 @@ export interface ThemeLevelGuidanceItem {
   description: string;
 }
 
+export type ProgressState = "not_started" | "in_progress" | "complete";
+
 export interface Acronym {
   id: number;
   acronym: string;
@@ -39,9 +41,13 @@ export interface TopicDetail {
   id: number;
   name: string;
   description?: string | null;
-  rating_level?: number | null;
-  is_na: boolean;
+  current_maturity?: number | null;
+  current_is_na: boolean;
+  desired_maturity?: number | null;
+  desired_is_na: boolean;
   comment?: string | null;
+  evidence_links: string[];
+  progress_state: ProgressState;
   guidance: Record<number, string[]>;
 }
 
@@ -50,6 +56,36 @@ export interface ThemeTopicsResponse {
   topics: TopicDetail[];
   rating_scale: RatingScaleItem[];
   generic_guidance: ThemeLevelGuidanceItem[];
+}
+
+export interface TopicAssessmentDetail extends TopicDetail {
+  theme_id: number;
+  theme_name: string;
+}
+
+export interface ThemeAssessmentBlock {
+  id: number;
+  name: string;
+  description?: string | null;
+  category?: string | null;
+  topic_count: number;
+  topics: TopicAssessmentDetail[];
+  generic_guidance: ThemeLevelGuidanceItem[];
+}
+
+export interface ProgressSummary {
+  total_topics: number;
+  completed_topics: number;
+  in_progress_topics: number;
+  not_started_topics: number;
+  completion_percent: number;
+}
+
+export interface DimensionAssessmentResponse {
+  dimension: Dimension;
+  rating_scale: RatingScaleItem[];
+  themes: ThemeAssessmentBlock[];
+  progress: ProgressSummary;
 }
 
 export interface SessionListItem {
@@ -80,9 +116,13 @@ export interface SessionDetail {
 
 export interface RatingUpdatePayload {
   topic_id: number;
-  rating_level?: number | null;
-  is_na: boolean;
+  current_maturity?: number | null;
+  desired_maturity?: number | null;
+  current_is_na: boolean;
+  desired_is_na: boolean;
   comment?: string | null;
+  evidence_links?: string[] | null;
+  progress_state?: ProgressState;
 }
 
 export interface RatingBulkUpdatePayload {

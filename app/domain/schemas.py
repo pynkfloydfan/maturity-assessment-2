@@ -11,7 +11,7 @@ import re
 from datetime import datetime
 from decimal import Decimal
 from html import escape
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
@@ -48,33 +48,6 @@ class CMMILevel(BaseModel):
         return v
 
 
-class RatingInput(BaseValidationSchema):
-    """Validation schema for topic ratings."""
-
-    rating_level: int | None = Field(None, ge=1, le=5)
-    is_na: bool = Field(default=False)
-    comment: str | None = Field(None, max_length=2000)
-
-    @model_validator(mode="after")
-    def validate_rating_consistency(self):
-        """Ensure rating_level and is_na are mutually exclusive."""
-        if self.is_na and self.rating_level is not None:
-            raise ValueError("Cannot have both is_na=True and a rating_level")
-        if not self.is_na and self.rating_level is None:
-            raise ValueError("Must provide rating_level when is_na=False")
-
-        return self
-
-    @field_validator("comment")
-    def validate_comment(cls, v):
-        """Validate comment content."""
-        if v is not None:
-            if len(v.strip()) == 0:
-                return None
-            # Additional sanitization for comments
-            v = re.sub(r"<script[^>]*>.*?</script>", "", v, flags=re.IGNORECASE | re.DOTALL)
-        return v
-
 
 class SessionCreationInput(BaseValidationSchema):
     """Validation schema for creating assessment sessions."""
@@ -104,29 +77,78 @@ class SessionCreationInput(BaseValidationSchema):
         return v
 
 
+ProgressState = Literal["not_started", "in_progress", "complete"]
+
+
 class AssessmentEntryInput(BaseValidationSchema):
-    """Validation schema for assessment entries."""
+    """Validation schema for assessment entries with dual maturity ratings."""
 
     session_id: int = Field(..., gt=0)
     topic_id: int = Field(..., gt=0)
-    rating_level: int | None = Field(None, ge=1, le=5)
+    current_maturity: int | None = Field(None, ge=1, le=5)
+    desired_maturity: int | None = Field(None, ge=1, le=5)
     computed_score: Decimal | None = Field(None, ge=0, le=5, decimal_places=2)
-    is_na: bool = Field(default=False)
+    current_is_na: bool = Field(default=False)
+    desired_is_na: bool = Field(default=False)
     comment: str | None = Field(None, max_length=2000)
+    evidence_links: list[str] | None = Field(default=None)
+    progress_state: ProgressState = Field(default="not_started")
 
     @model_validator(mode="after")
     def validate_entry_consistency(self):
-        """Ensure entry data is consistent."""
-        if self.is_na:
-            if self.rating_level is not None or self.computed_score is not None:
-                raise ValueError("Cannot have rating data when is_na=True")
+        """Ensure entry data is consistent with business rules."""
+        if self.current_is_na:
+            if self.current_maturity is not None:
+                raise ValueError("current_maturity must be null when current_is_na=True")
+            if not self.desired_is_na:
+                raise ValueError("desired_is_na must be True when current_is_na=True")
+            if self.desired_maturity is not None:
+                raise ValueError("desired_maturity must be null when desired_is_na=True")
         else:
-            if self.rating_level is None and self.computed_score is None:
+            if self.current_maturity is None and self.computed_score is None:
                 raise ValueError(
-                    "Must provide either rating_level or computed_score when is_na=False"
+                    "current_maturity (or computed_score) required when current_is_na=False"
                 )
+            if self.desired_is_na:
+                raise ValueError("desired_is_na cannot be True when current_is_na=False")
+
+        if not self.desired_is_na:
+            if self.desired_maturity is None:
+                raise ValueError(
+                    "desired_maturity is required when desired_is_na=False"
+                )
+            if self.current_is_na:
+                raise ValueError(
+                    "desired_maturity cannot be set when current_is_na=True"
+                )
+            if self.current_maturity is not None and self.desired_maturity < self.current_maturity:
+                raise ValueError("desired_maturity cannot be less than current_maturity")
 
         return self
+
+    @field_validator("evidence_links", mode="after")
+    def sanitise_evidence_links(cls, value: list[str] | None) -> list[str] | None:
+        if value is None:
+            return None
+        cleaned = []
+        for item in value:
+            if not item:
+                continue
+            text = item.strip()
+            if not text:
+                continue
+            cleaned.append(text)
+        return cleaned or None
+
+    @field_validator("comment")
+    def sanitise_comment(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        cleaned = value.strip()
+        if not cleaned:
+            return None
+        cleaned = re.sub(r"<script[^>]*>.*?</script>", "", cleaned, flags=re.IGNORECASE | re.DOTALL)
+        return cleaned
 
 
 class DatabaseConfigInput(BaseValidationSchema):
@@ -261,7 +283,8 @@ class FilterInput(BaseValidationSchema):
 
     dimension_name: str | None = Field(None, max_length=255)
     theme_name: str | None = Field(None, max_length=255)
-    rating_level: int | None = Field(None, ge=1, le=5)
+    current_maturity: int | None = Field(None, ge=1, le=5)
+    desired_maturity: int | None = Field(None, ge=1, le=5)
     is_na_only: bool = Field(default=False)
     has_comments: bool = Field(default=False)
 
