@@ -153,6 +153,17 @@ export default function DimensionAssessmentPage({ enableTreatNAasZero = false }:
   }
 
   const highlight = useAcronymHighlighter();
+  const renderDescriptionWithBreaks = useCallback(
+    (text: string) => {
+      return text.split(/\r?\n/).map((segment, index) => (
+        <Fragment key={`topic-description-line-${index}`}>
+          {index > 0 && <br />}
+          {highlight(segment)}
+        </Fragment>
+      ));
+    },
+    [highlight],
+  );
   const { activeSessionId } = useSessionContext();
   const { data, loading, error, refresh } = useDimensionAssessment(dimensionId, activeSessionId);
   const [initialSnapshots, setInitialSnapshots] = useState<SnapshotMapState>({});
@@ -671,7 +682,7 @@ export default function DimensionAssessmentPage({ enableTreatNAasZero = false }:
                         </summary>
                         {selectedTopic.description ? (
                           <div className="mt-3 text-sm leading-relaxed text-muted-foreground">
-                            {highlight(selectedTopic.description)}
+                            {renderDescriptionWithBreaks(selectedTopic.description)}
                           </div>
                         ) : (
                           <div className="mt-3 text-sm text-muted-foreground/80">No description provided.</div>
