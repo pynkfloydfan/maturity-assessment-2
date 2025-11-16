@@ -3,14 +3,14 @@ from __future__ import annotations
 
 import builtins
 from collections.abc import Iterable
-from typing import Any, TypeVar
+from typing import Any, TypeVar, Generic
 
 from sqlalchemy.orm import Session
 
 T = TypeVar("T")  # ORM model type
 
 
-class BaseRepository[T]:
+class BaseRepository(Generic[T]):
     """
     Lightweight generic repository with common CRUD + query helpers.
     - Intentionally small and decoupled from app-specific logging/decorators.
