@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import logging
 from decimal import Decimal
+import json
 from typing import NoReturn
 
 from sqlalchemy.exc import IntegrityError as SQLIntegrityError, SQLAlchemyError
@@ -60,10 +61,14 @@ class EntryRepo(GenericBaseRepository[AssessmentEntryORM]):
         self,
         session_id: int,
         topic_id: int,
-        rating_level: int | None = None,
+        current_maturity: int | None = None,
+        desired_maturity: int | None = None,
         computed_score: Decimal | None = None,
-        is_na: bool = False,
+        current_is_na: bool = False,
+        desired_is_na: bool = False,
         comment: str | None = None,
+        evidence_links: list[str] | None = None,
+        progress_state: str = "not_started",
     ) -> AssessmentEntryORM:
         """
         Create or update assessment entry.
@@ -72,10 +77,14 @@ class EntryRepo(GenericBaseRepository[AssessmentEntryORM]):
         validated_data = AssessmentEntryInput(
             session_id=session_id,
             topic_id=topic_id,
-            rating_level=rating_level,
+            current_maturity=current_maturity,
+            desired_maturity=desired_maturity,
             computed_score=computed_score,
-            is_na=is_na,
+            current_is_na=current_is_na,
+            desired_is_na=desired_is_na,
             comment=comment,
+            evidence_links=evidence_links,
+            progress_state=progress_state,
         )
 
         try:
@@ -90,14 +99,22 @@ class EntryRepo(GenericBaseRepository[AssessmentEntryORM]):
                 self.session.add(obj)
 
             # Update fields
-            obj.rating_level = validated_data.rating_level
+            obj.current_maturity = validated_data.current_maturity
+            obj.desired_maturity = validated_data.desired_maturity
             obj.computed_score = (
                 float(validated_data.computed_score)
                 if validated_data.computed_score is not None
                 else None
             )
-            obj.is_na = validated_data.is_na
+            obj.current_is_na = validated_data.current_is_na
+            obj.desired_is_na = validated_data.desired_is_na
             obj.comment = validated_data.comment
+            obj.evidence_links = (
+                json.dumps(validated_data.evidence_links)
+                if validated_data.evidence_links
+                else None
+            )
+            obj.progress_state = validated_data.progress_state
 
             self.session.flush()
             return obj

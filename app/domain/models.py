@@ -55,10 +55,16 @@ class AssessmentEntry:
     id: int
     session_id: int
     topic_id: int
-    rating_level: int | None  # None if N/A
-    is_na: bool
+    current_maturity: int | None
+    current_is_na: bool
+    desired_maturity: int | None
+    desired_is_na: bool
     comment: str | None
+    evidence_links: list[str] | None
+    progress_state: str
+    computed_score: float | None = None
     created_at: datetime
+    updated_at: datetime
 
 
 @dataclass(slots=True)

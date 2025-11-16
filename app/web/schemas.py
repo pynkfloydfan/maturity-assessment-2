@@ -45,9 +45,13 @@ class RatingScale(BaseModel):
 
 class TopicRating(BaseModel):
     topic_id: int
-    rating_level: Optional[int] = Field(default=None, ge=1, le=5)
-    is_na: bool = False
+    current_maturity: Optional[int] = Field(default=None, ge=1, le=5)
+    desired_maturity: Optional[int] = Field(default=None, ge=1, le=5)
+    current_is_na: bool = False
+    desired_is_na: bool = False
     comment: Optional[str] = None
+    evidence_links: Optional[list[str]] = None
+    progress_state: Optional[ProgressState] = None
     updated_at: Optional[datetime] = None
 
 
@@ -56,13 +60,20 @@ class TopicGuidance(BaseModel):
     bullets: list[str]
 
 
+ProgressState = Literal["not_started", "in_progress", "complete"]
+
+
 class TopicDetail(BaseModel):
     id: int
     name: str
     description: Optional[str] = None
-    rating_level: Optional[int] = None
-    is_na: bool = False
+    current_maturity: Optional[int] = None
+    current_is_na: bool = False
+    desired_maturity: Optional[int] = None
+    desired_is_na: bool = False
     comment: Optional[str] = None
+    evidence_links: list[str] = Field(default_factory=list)
+    progress_state: ProgressState = "not_started"
     guidance: dict[int, list[str]] = Field(default_factory=dict)
 
 
@@ -71,6 +82,36 @@ class ThemeTopicsResponse(BaseModel):
     topics: list[TopicDetail]
     rating_scale: list[RatingScale]
     generic_guidance: list[ThemeLevelGuidance]
+
+
+class TopicAssessmentDetail(TopicDetail):
+    theme_id: int
+    theme_name: str
+
+
+class ThemeAssessmentBlock(BaseModel):
+    id: int
+    name: str
+    description: Optional[str] = None
+    category: Optional[str] = None
+    topic_count: int
+    topics: list[TopicAssessmentDetail]
+    generic_guidance: list[ThemeLevelGuidance]
+
+
+class ProgressSummary(BaseModel):
+    total_topics: int
+    completed_topics: int
+    in_progress_topics: int
+    not_started_topics: int
+    completion_percent: float
+
+
+class DimensionAssessmentResponse(BaseModel):
+    dimension: Dimension
+    rating_scale: list[RatingScale]
+    themes: list[ThemeAssessmentBlock]
+    progress: ProgressSummary
 
 
 class AverageScore(BaseModel):
@@ -168,9 +209,13 @@ class SessionCombineRequest(BaseModel):
 
 class RatingUpdate(BaseModel):
     topic_id: int
-    rating_level: Optional[int] = Field(default=None, ge=1, le=5)
-    is_na: bool = False
+    current_maturity: Optional[int] = Field(default=None, ge=1, le=5)
+    desired_maturity: Optional[int] = Field(default=None, ge=1, le=5)
+    current_is_na: bool = False
+    desired_is_na: bool = False
     comment: Optional[str] = None
+    evidence_links: Optional[list[str]] = None
+    progress_state: Optional[ProgressState] = None
 
 
 class RatingBulkUpdateRequest(BaseModel):

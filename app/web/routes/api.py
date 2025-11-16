@@ -43,6 +43,8 @@ from app.web.schemas import (
     DatabaseOperationResponse,
     DatabaseSettings,
     Dimension,
+    DimensionAssessmentResponse,
+    ProgressSummary,
     RatingBulkUpdateRequest,
     RatingScale,
     RatingUpdate,
@@ -56,9 +58,11 @@ from app.web.schemas import (
     SessionSummary,
     SessionStatistics,
     Theme,
+    ThemeAssessmentBlock,
     ThemeLevelGuidance,
     ThemeAverageScore,
     ThemeTopicsResponse,
+    TopicAssessmentDetail,
     TopicDetail,
     TopicScore,
 )
@@ -68,7 +72,7 @@ logger = logging.getLogger(__name__)
 
 APP_DIR = Path(__file__).resolve().parents[2]
 PROJECT_ROOT = APP_DIR.parent
-DEFAULT_EXCEL_PATH = (APP_DIR / "source_data" / "enhanced_operational_resilience_maturity_v6.xlsx").resolve()
+DEFAULT_EXCEL_PATH = (APP_DIR / "source_data" / "Maturity_Assessment_Data.xlsx").resolve()
 
 
 def _config_to_dict(config: DatabaseConfig) -> dict[str, object]:
@@ -300,7 +304,7 @@ def get_dashboard_data(
 
     ratings_map: dict[int, tuple[float, str]] = {}
     for entry in entries:
-        if entry.is_na:
+        if entry.current_is_na:
             continue
         if entry.computed_score is not None:
             try:
@@ -309,8 +313,8 @@ def get_dashboard_data(
                 continue
             ratings_map[entry.topic_id] = (score_value, "computed")
             continue
-        if entry.rating_level is not None:
-            ratings_map.setdefault(entry.topic_id, (float(entry.rating_level), "rating"))
+        if entry.current_maturity is not None:
+            ratings_map.setdefault(entry.topic_id, (float(entry.current_maturity), "rating"))
 
     topic_rows = (
         db.query(
@@ -426,6 +430,193 @@ def list_themes_for_dimension(
     ]
 
 
+@router.get(
+    "/dimensions/{dimension_id}/assessment",
+    response_model=DimensionAssessmentResponse,
+)
+def get_dimension_assessment(
+    dimension_id: int,
+    session_id: int | None = None,
+    db: Session = Depends(get_db_session),
+) -> DimensionAssessmentResponse:
+    dimension = db.get(DimensionORM, dimension_id)
+    if dimension is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Dimension not found")
+
+    themes = (
+        db.query(ThemeORM)
+        .filter(ThemeORM.dimension_id == dimension_id)
+        .order_by(ThemeORM.name)
+        .all()
+    )
+    theme_ids = [theme.id for theme in themes]
+
+    topics: list[TopicORM] = []
+    if theme_ids:
+        topics = (
+            db.query(TopicORM)
+            .filter(TopicORM.theme_id.in_(theme_ids))
+            .order_by(TopicORM.name)
+            .all()
+        )
+
+    topic_ids = [topic.id for topic in topics]
+
+    entries_map: dict[int, AssessmentEntryORM] = {}
+    if session_id and topic_ids:
+        entries = (
+            db.query(AssessmentEntryORM)
+            .filter(
+                AssessmentEntryORM.session_id == session_id,
+                AssessmentEntryORM.topic_id.in_(topic_ids),
+            )
+            .all()
+        )
+        entries_map = {entry.topic_id: entry for entry in entries}
+
+    guidance_map: dict[int, dict[int, list[str]]] = {}
+    if topic_ids:
+        explanations = (
+            db.query(ExplanationORM)
+            .filter(ExplanationORM.topic_id.in_(topic_ids))
+            .order_by(ExplanationORM.topic_id, ExplanationORM.level, ExplanationORM.id)
+            .all()
+        )
+        for explanation in explanations:
+            guidance_map.setdefault(explanation.topic_id, {}).setdefault(explanation.level, []).append(
+                explanation.text
+            )
+
+    theme_guidance_map: dict[int, list[ThemeLevelGuidance]] = {theme.id: [] for theme in themes}
+    if theme_ids:
+        theme_guidance_rows = (
+            db.query(ThemeLevelGuidanceORM)
+            .filter(ThemeLevelGuidanceORM.theme_id.in_(theme_ids))
+            .order_by(ThemeLevelGuidanceORM.theme_id, ThemeLevelGuidanceORM.level)
+            .all()
+        )
+        for row in theme_guidance_rows:
+            theme_guidance_map.setdefault(row.theme_id, []).append(
+                ThemeLevelGuidance(level=row.level, description=row.description)
+            )
+
+    rating_scale = [
+        RatingScale(level=scale.level, label=scale.label, description=scale.description)
+        for scale in db.query(RatingScaleORM).order_by(RatingScaleORM.level)
+    ]
+
+    topics_by_theme: dict[int, list[TopicORM]] = {theme.id: [] for theme in themes}
+    for topic in topics:
+        topics_by_theme.setdefault(topic.theme_id, []).append(topic)
+
+    allowed_states = {"not_started", "in_progress", "complete"}
+    progress_totals = {state: 0 for state in allowed_states}
+
+    def _parse_evidence(entry: AssessmentEntryORM | None) -> list[str]:
+        if entry is None or not entry.evidence_links:
+            return []
+        try:
+            parsed = json.loads(entry.evidence_links)
+            if isinstance(parsed, list):
+                return [str(item).strip() for item in parsed if str(item).strip()]
+            if parsed is not None:
+                value = str(parsed).strip()
+                return [value] if value else []
+        except json.JSONDecodeError:
+            value = entry.evidence_links.strip()
+            return [value] if value else []
+        return []
+
+    theme_blocks: list[ThemeAssessmentBlock] = []
+    for theme in themes:
+        theme_topics: list[TopicAssessmentDetail] = []
+        for topic in topics_by_theme.get(theme.id, []):
+            entry = entries_map.get(topic.id)
+            evidence = _parse_evidence(entry)
+
+            if entry:
+                state = entry.progress_state if entry.progress_state in allowed_states else None
+                if state is None:
+                    if entry.current_is_na or entry.current_maturity is not None:
+                        if entry.desired_is_na or entry.desired_maturity is not None:
+                            state = "complete"
+                        else:
+                            state = "in_progress"
+                    else:
+                        state = "not_started"
+            else:
+                state = "not_started"
+
+            progress_totals[state] = progress_totals.get(state, 0) + 1
+
+            theme_topics.append(
+                TopicAssessmentDetail(
+                    id=topic.id,
+                    name=topic.name,
+                    description=topic.description,
+                    current_maturity=(
+                        entry.current_maturity if entry and not entry.current_is_na else None
+                    ),
+                    current_is_na=bool(entry.current_is_na) if entry else False,
+                    desired_maturity=(
+                        entry.desired_maturity if entry and not entry.desired_is_na else None
+                    ),
+                    desired_is_na=bool(entry.desired_is_na) if entry else False,
+                    comment=entry.comment if entry else None,
+                    evidence_links=evidence,
+                    progress_state=state,
+                    guidance=guidance_map.get(topic.id, {}),
+                    theme_id=theme.id,
+                    theme_name=theme.name,
+                )
+            )
+
+        theme_blocks.append(
+            ThemeAssessmentBlock(
+                id=theme.id,
+                name=theme.name,
+                description=theme.description,
+                category=theme.category,
+                topic_count=len(theme_topics),
+                topics=theme_topics,
+                generic_guidance=theme_guidance_map.get(theme.id, []),
+            )
+        )
+
+    total_topics = len(topics)
+    completed_topics = progress_totals.get("complete", 0)
+    in_progress_topics = progress_totals.get("in_progress", 0)
+    not_started_topics = progress_totals.get("not_started", 0)
+    completion_percent = (
+        round((completed_topics / total_topics) * 100, 1) if total_topics > 0 else 0.0
+    )
+
+    dimension_payload = Dimension(
+        id=dimension.id,
+        name=dimension.name,
+        description=dimension.description,
+        image_filename=dimension.image_filename,
+        image_alt=dimension.image_alt,
+        theme_count=len(themes),
+        topic_count=total_topics,
+    )
+
+    progress = ProgressSummary(
+        total_topics=total_topics,
+        completed_topics=completed_topics,
+        in_progress_topics=in_progress_topics,
+        not_started_topics=not_started_topics,
+        completion_percent=completion_percent,
+    )
+
+    return DimensionAssessmentResponse(
+        dimension=dimension_payload,
+        rating_scale=rating_scale,
+        themes=theme_blocks,
+        progress=progress,
+    )
+
+
 @router.get("/themes/{theme_id}/topics", response_model=ThemeTopicsResponse)
 def get_theme_topics(
     theme_id: int,
@@ -487,14 +678,32 @@ def get_theme_topics(
     topic_details = []
     for topic in topics:
         entry = ratings_map.get(topic.id)
+        evidence_links: list[str] = []
+        if entry and entry.evidence_links:
+            try:
+                parsed = json.loads(entry.evidence_links)
+                if isinstance(parsed, list):
+                    evidence_links = [str(item).strip() for item in parsed if str(item).strip()]
+                elif parsed is not None:
+                    evidence_links = [str(parsed).strip()]
+            except json.JSONDecodeError:
+                evidence_links = [entry.evidence_links]
         topic_details.append(
             TopicDetail(
                 id=topic.id,
                 name=topic.name,
                 description=topic.description,
-                rating_level=(entry.rating_level if entry and not entry.is_na else None),
-                is_na=bool(entry.is_na) if entry else False,
+                current_maturity=(
+                    entry.current_maturity if entry and not entry.current_is_na else None
+                ),
+                current_is_na=bool(entry.current_is_na) if entry else False,
+                desired_maturity=(
+                    entry.desired_maturity if entry and not entry.desired_is_na else None
+                ),
+                desired_is_na=bool(entry.desired_is_na) if entry else False,
                 comment=entry.comment if entry else None,
+                evidence_links=evidence_links,
+                progress_state=entry.progress_state if entry else "not_started",
                 guidance=guidance_map.get(topic.id, {}),
             )
         )
@@ -622,14 +831,28 @@ def update_ratings(
 
     try:
         for update in payload.updates:
-            rating_level = update.rating_level if not update.is_na else None
+            current_is_na = update.current_is_na
+            desired_is_na = update.desired_is_na or current_is_na
+            desired_maturity = update.desired_maturity
+            if current_is_na:
+                desired_is_na = True
+                desired_maturity = None
+            elif desired_is_na:
+                desired_maturity = None
+            elif desired_maturity is None:
+                desired_maturity = update.current_maturity
+
             app_api.record_topic_rating(
                 db,
                 session_id=session_id,
                 topic_id=update.topic_id,
-                rating_level=rating_level,
-                is_na=update.is_na,
+                current_maturity=update.current_maturity,
+                desired_maturity=desired_maturity,
+                current_is_na=current_is_na,
+                desired_is_na=desired_is_na,
                 comment=update.comment,
+                evidence_links=update.evidence_links,
+                progress_state=update.progress_state or "in_progress",
             )
         db.commit()
     except Exception:
@@ -644,14 +867,28 @@ def update_single_rating(
     db: Session = Depends(get_db_session),
 ) -> None:
     try:
-        rating_level = payload.rating_level if not payload.is_na else None
+        current_is_na = payload.current_is_na
+        desired_is_na = payload.desired_is_na or current_is_na
+        desired_maturity = payload.desired_maturity
+        if current_is_na:
+            desired_is_na = True
+            desired_maturity = None
+        elif desired_is_na:
+            desired_maturity = None
+        elif desired_maturity is None:
+            desired_maturity = payload.current_maturity
+
         app_api.record_topic_rating(
             db,
             session_id=session_id,
             topic_id=payload.topic_id,
-            rating_level=rating_level,
-            is_na=payload.is_na,
+            current_maturity=payload.current_maturity,
+            desired_maturity=desired_maturity,
+            current_is_na=current_is_na,
+            desired_is_na=desired_is_na,
             comment=payload.comment,
+            evidence_links=payload.evidence_links,
+            progress_state=payload.progress_state or "in_progress",
         )
         db.commit()
     except Exception:

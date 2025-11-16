@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { Link } from "react-router-dom";
-import { Grid3x3Icon, ImageIcon, ListChecksIcon, SparklesIcon } from "../icons";
+import { Grid3x3Icon, ListChecksIcon, SparklesIcon } from "../icons";
 import { usePageBreadcrumb } from "../context/BreadcrumbContext";
 import { useDimensions } from "../hooks/useDimensions";
 import { useAcronymHighlighter } from "../hooks/useAcronymHighlighter";
@@ -8,10 +8,10 @@ import { useAcronymHighlighter } from "../hooks/useAcronymHighlighter";
 const DIMENSION_SLUGS: Record<string, string> = {
   "Governance & Leadership": "governance-leadership",
   "Risk Assessment & Management": "risk-assessment-management",
-  "BC & DR Planning": "bc-dr-planning",
+  "Business Continuity & Disaster Recovery Planning": "bc-dr-planning",
   "Process & Dependency Mapping": "process-dependency-mapping",
   "IT & Cyber Resilience": "it-cyber-resilience",
-  "Crisis Comms & Incident Mgmt": "crisis-comms-incident-mgmt",
+  "Incident Management & Crisis Communications": "crisis-comms-incident-mgmt",
   "Third-Party Resilience": "third-party-resilience",
   "Culture & Human Factors": "culture-human-factors",
   "Regulatory Compliance & Resolvability": "regulatory-compliance-resolvability",
@@ -42,7 +42,7 @@ function DimensionTile({
   const highlight = useAcronymHighlighter();
   return (
     <Link
-      to={`/dimensions/${id}/themes`}
+      to={`/dimensions/${id}/assessment`}
       className="tile-card"
     >
       <div className="tile-card__media">
@@ -96,6 +96,7 @@ export default function DimensionsPage() {
 
   const dimensionCount = dimensions.length;
   const themeCount = dimensions.reduce((acc, item) => acc + (item.theme_count ?? 0), 0);
+  const topicCount = dimensions.reduce((acc, item) => acc + (item.topic_count ?? 0), 0);
 
   const breadcrumbItems = useMemo(() => [{ label: "Dimensions" }], []);
   usePageBreadcrumb(breadcrumbItems);
@@ -117,22 +118,28 @@ export default function DimensionsPage() {
             <span className="status-item__icon">
               <Grid3x3Icon />
             </span>
-            <div className="status-label">Dimensions</div>
-            <div className="status-value">{loading ? "–" : dimensionCount}</div>
+            <div className="status-item__body">
+              <div className="status-label">Dimensions</div>
+              <div className="status-value">{loading ? "–" : dimensionCount}</div>
+            </div>
           </div>
           <div className="status-item">
             <span className="status-item__icon">
               <SparklesIcon />
             </span>
-            <div className="status-label">Themes</div>
-            <div className="status-value">{loading ? "–" : themeCount}</div>
+            <div className="status-item__body">
+              <div className="status-label">Themes</div>
+              <div className="status-value">{loading ? "–" : themeCount}</div>
+            </div>
           </div>
           <div className="status-item">
             <span className="status-item__icon">
-              <ImageIcon />
+              <ListChecksIcon />
             </span>
-            <div className="status-label">Imagery</div>
-            <div className="status-value">Curated</div>
+            <div className="status-item__body">
+              <div className="status-label">Topics</div>
+              <div className="status-value">{loading ? "–" : topicCount}</div>
+            </div>
           </div>
         </div>
       </div>

@@ -27,7 +27,7 @@ def lerp(a: float, b: float, t: float) -> float:
 DEFAULT_STOPS: list[tuple[float, str]] = [
     (1.0, "#D73027"),
     (2.0, "#D78827"),
-    (3.0, "#FEE08B"),
+    (3.0, "#F9D23C"),
     (4.0, "#27D730"),
     (5.0, "#3027D7"),
 ]

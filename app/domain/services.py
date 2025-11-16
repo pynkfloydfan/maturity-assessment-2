@@ -42,8 +42,8 @@ class ScoringService:
     def compute_theme_averages(self, session_id: int) -> list[AverageResult]:
         """
         Per-theme average for a session via a single aggregated query.
-        - Average uses COALESCE(computed_score, rating_level).
-        - Excludes entries with is_na=True.
+        - Average uses COALESCE(computed_score, current_maturity).
+        - Excludes entries with current_is_na=True.
         - coverage = rated_topics / total_topics in theme.
         - Includes themes with zero topics (avg=NaN, coverage=0.0).
         """
@@ -58,20 +58,17 @@ class ScoringService:
                 .subquery()
             )
 
-            # Score expression: prefer computed_score, fallback to rating_level
+            # Score expression: prefer computed_score, fallback to current maturity
             score_expr = func.coalesce(
                 AssessmentEntryORM.computed_score,
-                AssessmentEntryORM.rating_level,
+                AssessmentEntryORM.current_maturity,
             )
 
             # Count only rated entries that are not N/A and have a score
             rated_count_expr = func.coalesce(
                 func.sum(
                     case(
-                        (
-                            (AssessmentEntryORM.is_na.is_(False)) & (score_expr.isnot(None)),
-                            1,
-                        ),
+                        ((AssessmentEntryORM.current_is_na.is_(False)) & (score_expr.isnot(None)), 1),
                         else_=0,
                     )
                 ),
@@ -81,7 +78,7 @@ class ScoringService:
             # Average only over non-N/A scores; else NULL which we translate to NaN
             avg_expr = func.avg(
                 case(
-                    ((AssessmentEntryORM.is_na.is_(False)), score_expr),
+                    ((AssessmentEntryORM.current_is_na.is_(False)), score_expr),
                     else_=None,
                 )
             ).label("avg_score")

@@ -23,7 +23,7 @@ The Operational Resilience Maturity Assessment platform combines a FastAPI backe
 1. **Install dependencies**: `poetry install` for backend tooling, `npm install` (inside `frontend/`) for the React bundle.
 2. **Configure the database** via **Settings → Database configuration** (or by supplying the `DB_` environment variables listed below).
 3. **Initialise schema**: click **Initialise tables** in Settings or run `poetry run alembic upgrade head` to apply migrations.
-4. **Seed the enhanced dataset** using the Settings page or `poetry run seed-database` (defaults to `app/source_data/enhanced_operational_resilience_maturity_v6.xlsx`).
+4. **Seed the enhanced dataset** using the Settings page or `poetry run seed-database` (defaults to `app/source_data/Maturity_Assessment_Data.xlsx`).
 5. **Create a session** from **Settings → Sessions** so the dashboard has context.
 6. **Capture ratings** in the main UI, or import them from Excel (details in [Uploading Assessments from Excel](#uploading-assessments-from-excel)).
 7. **Review dashboards** via the “Dashboard” tab, and export results as JSON/XLSX when needed.
@@ -86,7 +86,7 @@ Settings for the backend live in `app/infrastructure/config.py` and the `.env` f
 - **Seed from Excel** hits `/api/settings/database/seed` and streams CLI output to the UI (shown under the button when available).
 
 ## Seeding & Maintaining Data
-- The canonical workbook is `app/source_data/enhanced_operational_resilience_maturity_v6.xlsx`.
+- The canonical workbook is `app/source_data/Maturity_Assessment_Data.xlsx`.
 - Seeding populates dimensions, themes, topics, rating scale, and guidance text (see `scripts/seed_dataset.py`).
 - Re-running the seed script updates descriptions, replaces per-topic explanations, and preserves IDs, so it’s safe after schema adjustments.
 - Use **Refresh sessions** in Settings to fetch new or updated sessions once seeding completes.

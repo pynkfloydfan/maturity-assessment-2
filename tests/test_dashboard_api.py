@@ -67,8 +67,22 @@ def seed_minimal_dataset(session: Session) -> int:
 
     session.add_all(
         [
-            AssessmentEntryORM(session_id=seed_session.id, topic_id=topics[0].id, rating_level=3, is_na=False),
-            AssessmentEntryORM(session_id=seed_session.id, topic_id=topics[1].id, rating_level=5, is_na=False),
+            AssessmentEntryORM(
+                session_id=seed_session.id,
+                topic_id=topics[0].id,
+                current_maturity=3,
+                desired_maturity=3,
+                current_is_na=False,
+                desired_is_na=False,
+            ),
+            AssessmentEntryORM(
+                session_id=seed_session.id,
+                topic_id=topics[1].id,
+                current_maturity=5,
+                desired_maturity=5,
+                current_is_na=False,
+                desired_is_na=False,
+            ),
         ]
     )
 
@@ -102,9 +116,34 @@ def test_dashboard_endpoints_return_data():
     assert figures["radar"]["data"]
 
 
+def test_dimension_assessment_endpoint():
+    client, SessionLocal = build_app_with_db()
+    with SessionLocal() as session:
+        session_id = seed_minimal_dataset(session)
+        session.commit()
+
+    with SessionLocal() as session:
+        dimension_id = session.query(DimensionORM.id).scalar()
+        assert dimension_id is not None
+
+    response = client.get(
+        f"/api/dimensions/{dimension_id}/assessment",
+        params={"session_id": session_id},
+    )
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["dimension"]["id"] == dimension_id
+    assert payload["themes"]
+    assert payload["progress"]["total_topics"] == 2
+    first_theme = payload["themes"][0]
+    first_topic = first_theme["topics"][0]
+    assert "current_maturity" in first_topic
+    assert "desired_maturity" in first_topic
+
+
 def test_seed_from_excel_populates_descriptions(tmp_path):
     client, SessionLocal = build_app_with_db()
-    excel_path = Path("app/source_data/enhanced_operational_resilience_maturity_v6.xlsx")
+    excel_path = Path("app/source_data/Maturity_Assessment_Data.xlsx")
     assert excel_path.exists(), "Seed spreadsheet missing"
 
     with SessionLocal() as session:
@@ -225,5 +264,5 @@ def test_import_session_xlsx_updates_entries(tmp_path):
             .order_by(AssessmentEntryORM.topic_id)
             .all()
         )
-        assert [entry.rating_level for entry in entries] == [2, 4]
+        assert [entry.current_maturity for entry in entries] == [2, 4]
         assert [entry.comment for entry in entries] == ["Adjusted score", "Progress noted"]

@@ -76,7 +76,7 @@ environment variables or update your `.env` / config as needed.
 poetry run seed-database \
   --backend sqlite \
   --sqlite-path ./resilience.db \
-  --excel-path app/source_data/enhanced_operational_resilience_maturity_v6.xlsx
+  --excel-path app/source_data/Maturity_Assessment_Data.xlsx
 ```
 
 MySQL example:
@@ -89,7 +89,7 @@ poetry run seed-database \
   --mysql-user resilience_user \
   --mysql-password '***' \
   --mysql-database resilience \
-  --excel-path app/source_data/enhanced_operational_resilience_maturity_v6.xlsx
+  --excel-path app/source_data/Maturity_Assessment_Data.xlsx
 ```
 
 The seeding script inventories the workbook tables up front (printing sheet names
@@ -197,7 +197,7 @@ poetry run pytest -q
 ```
 
 The suite exercises dashboard endpoints and verifies that seeding from
-`app/source_data/enhanced_operational_resilience_maturity_v6.xlsx` populates the
+`app/source_data/Maturity_Assessment_Data.xlsx` populates the
 new descriptive fields.
 
 ## Manual QA checklist
@@ -207,19 +207,16 @@ Perform these steps whenever you want a quick end-to-end verification:
 1. `poetry run server`
 2. Open <http://127.0.0.1:8000>
 3. Navigate to **Settings** → seed the database (if empty) and create/select a session.
-4. Visit **Dimensions**/**Themes**/**Topics** to capture ratings and comments.
+4. Visit **Dimensions** → select a dimension to open the split-pane assessment workspace. Capture current and desired maturity, comments, and evidence from the unified page.
 5. Confirm the **Dashboard** renders tiles, the Plotly radar, and download links
    for JSON/XLSX exports.
 
 ### Customising imagery
 
-- **Golden source** – Runtime card art is served from
-  `app/web/static/images/dimensions/` and
-  `app/web/static/images/themes/<dimension>/<theme>.jpg`. Replace those `.jpg`
-  files (e.g. `governance-leadership.jpg`) with your own artwork and rerun
-  `npm run build` (or `poetry run server`, which triggers a build if required).
-- Theme cards fall back to their parent dimension image when a
-  `themes/<dimension>/<theme>.jpg` variant is not provided.
+- **Golden source** – Runtime card art for the Dimensions overview is served from
+  `app/web/static/images/dimensions/`. Replace those `.jpg` files (e.g.
+  `governance-leadership.jpg`) with your own artwork and rerun `npm run build`
+  (or `poetry run server`, which triggers a build if required).
 - Colour tokens (CSS variables beginning with `--color-`) live near the top of
   `frontend/src/index.css`. Adjust these to personalise the palette and typography.
 
@@ -228,9 +225,9 @@ Perform these steps whenever you want a quick end-to-end verification:
 - Lucide icons are curated via `frontend/src/icons.ts`. Import icon components
   from that module so the bundle only includes the symbols we actually render.
 - Reusable card, badge, and status styles live in `frontend/src/index.css`
-  (`.tile-card`, `.badge-soft`, `.status-card`, `.topic-card`). Extend those
-  classes when adding new surfaces to keep shadows, corner radius, and hover
-  treatments consistent.
+  (e.g. `.tile-card`, `.badge-soft`, `.status-card`). Extend those classes when
+  adding new surfaces to keep shadows, corner radius, and hover treatments
+  consistent.
 
 ## Next steps
 

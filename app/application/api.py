@@ -7,10 +7,11 @@ with proper error handling, user-friendly messages, and comprehensive logging.
 
 from __future__ import annotations
 
-from decimal import Decimal
-from datetime import date, datetime
 import json
 import math
+import re
+from decimal import Decimal
+from datetime import date, datetime
 from typing import Any
 
 import pandas as pd
@@ -194,9 +195,13 @@ def record_topic_rating(
     session: Session,
     session_id: int,
     topic_id: int,
-    rating_level: int | None = None,
-    is_na: bool = False,
+    current_maturity: int | None = None,
+    desired_maturity: int | None = None,
+    current_is_na: bool = False,
+    desired_is_na: bool = False,
     comment: str | None = None,
+    evidence_links: list[str] | None = None,
+    progress_state: str = "not_started",
 ) -> AssessmentEntryORM:
     """
     Record or update a topic rating with comprehensive validation.
@@ -205,9 +210,13 @@ def record_topic_rating(
         session: Database session
         session_id: Target assessment session ID
         topic_id: Topic being rated
-        rating_level: CMMI rating (1-5) or None if N/A
-        is_na: Whether this entry is marked as Not Applicable
+        current_maturity: Current maturity rating (1-5) or None if N/A
+        desired_maturity: Target maturity rating (1-5) or None if N/A
+        current_is_na: Whether the topic is not applicable currently
+        desired_is_na: Whether the desired state is marked N/A (only valid if current is N/A)
         comment: Optional comment for the rating
+        evidence_links: Optional list of supporting evidence links
+        progress_state: Declared progress state (`not_started`, `in_progress`, `complete`)
 
     Returns:
         AssessmentEntryORM instance
@@ -222,10 +231,11 @@ def record_topic_rating(
         ...     session,
         ...     session_id=1,
         ...     topic_id=123,
-        ...     rating_level=3,
+        ...     current_maturity=3,
+        ...     desired_maturity=4,
         ...     comment="Good practices in place"
         ... )
-        >>> print(f"Recorded rating: {entry.rating_level}")
+        >>> print(f"Recorded rating: {entry.current_maturity} → {entry.desired_maturity}")
     """
     # Validate input
     validation_result = validate_input(
@@ -233,9 +243,13 @@ def record_topic_rating(
         {
             "session_id": session_id,
             "topic_id": topic_id,
-            "rating_level": rating_level,
-            "is_na": is_na,
+            "current_maturity": current_maturity,
+            "desired_maturity": desired_maturity,
+            "current_is_na": current_is_na,
+            "desired_is_na": desired_is_na,
             "comment": comment,
+            "evidence_links": evidence_links,
+            "progress_state": progress_state,
         },
     )
 
@@ -243,6 +257,7 @@ def record_topic_rating(
         error_msg = "; ".join([f"{e.field}: {e.message}" for e in validation_result.errors])
         logger.warning(f"Rating validation failed: {error_msg}")
         raise ValidationError("rating_data", error_msg)
+    validated_data = validation_result.data or {}
 
     try:
         set_context(operation="record_rating", session_id=session_id, topic_id=topic_id)
@@ -260,18 +275,37 @@ def record_topic_rating(
         entry = entry_repo.upsert(
             session_id=session_id,
             topic_id=topic_id,
-            rating_level=rating_level,
-            is_na=is_na,
-            comment=comment,
+            current_maturity=validated_data["current_maturity"],
+            desired_maturity=validated_data["desired_maturity"],
+            current_is_na=validated_data["current_is_na"],
+            desired_is_na=validated_data["desired_is_na"],
+            comment=validated_data["comment"],
+            evidence_links=validated_data["evidence_links"],
+            progress_state=validated_data["progress_state"],
         )
 
-        rating_desc = "N/A" if is_na else f"Level {rating_level}"
-        logger.info(f"Recorded rating {rating_desc} for topic {topic_id} in session {session_id}")
+        rating_desc = (
+            "N/A"
+            if validated_data["current_is_na"]
+            else f"Current {validated_data['current_maturity']} → Desired {validated_data['desired_maturity']}"
+        )
+        logger.info(
+            "Recorded assessment %s for topic %s in session %s",
+            rating_desc,
+            topic_id,
+            session_id,
+        )
         return entry
 
     except Exception as e:
         error_details = log_error_details(
-            e, {"session_id": session_id, "topic_id": topic_id, "rating_level": rating_level}
+            e,
+            {
+                "session_id": session_id,
+                "topic_id": topic_id,
+                "current_maturity": current_maturity,
+                "desired_maturity": desired_maturity,
+            },
         )
         logger.error("Failed to record topic rating", extra=error_details)
 
@@ -464,12 +498,12 @@ def build_dashboard_figures(session: Session, session_id: int) -> dict[str, Any]
 
         ratings_map: dict[int, float] = {}
         for entry in entries:
-            if entry.is_na:
+            if entry.current_is_na:
                 continue
             if entry.computed_score is not None:
                 ratings_map[entry.topic_id] = float(entry.computed_score)
-            elif entry.rating_level is not None:
-                ratings_map[entry.topic_id] = float(entry.rating_level)
+            elif entry.current_maturity is not None:
+                ratings_map[entry.topic_id] = float(entry.current_maturity)
 
         score_rows: list[dict[str, Any]] = []
         for _, row in topics_df.iterrows():
@@ -545,14 +579,25 @@ def export_session_results(session: Session, session_id: int) -> tuple[pd.DataFr
         # Convert entries to DataFrame
         entry_rows = []
         for entry in entries:
+            evidence = None
+            if entry.evidence_links:
+                try:
+                    evidence = json.loads(entry.evidence_links)
+                except json.JSONDecodeError:
+                    evidence = [entry.evidence_links]
             entry_rows.append(
                 {
                     "TopicID": entry.topic_id,
-                    "Rating": entry.rating_level,
+                    "CurrentMaturity": entry.current_maturity,
+                    "DesiredMaturity": entry.desired_maturity,
                     "ComputedScore": float(entry.computed_score) if entry.computed_score else None,
-                    "N/A": entry.is_na,
+                    "CurrentNA": entry.current_is_na,
+                    "DesiredNA": entry.desired_is_na,
                     "Comment": entry.comment,
+                    "EvidenceLinks": evidence,
+                    "ProgressState": entry.progress_state,
                     "CreatedAt": entry.created_at,
+                    "UpdatedAt": entry.updated_at,
                 }
             )
 
@@ -560,7 +605,19 @@ def export_session_results(session: Session, session_id: int) -> tuple[pd.DataFr
             pd.DataFrame(entry_rows)
             if entry_rows
             else pd.DataFrame(
-                columns=["TopicID", "Rating", "ComputedScore", "N/A", "Comment", "CreatedAt"]
+                columns=[
+                    "TopicID",
+                    "CurrentMaturity",
+                    "DesiredMaturity",
+                    "ComputedScore",
+                    "CurrentNA",
+                    "DesiredNA",
+                    "Comment",
+                    "EvidenceLinks",
+                    "ProgressState",
+                    "CreatedAt",
+                    "UpdatedAt",
+                ]
             )
         )
 
@@ -615,6 +672,13 @@ def import_session_results(
                 return True
             return False
 
+        def _coerce_bool(value: Any) -> bool:
+            if _is_missing(value):
+                return False
+            if isinstance(value, str):
+                return value.strip().lower() in {"1", "true", "yes", "y"}
+            return bool(value)
+
         for index, row in enumerate(records, start=2):
             topic_id_raw = row.get("TopicID")
             if _is_missing(topic_id_raw):
@@ -634,19 +698,38 @@ def import_session_results(
                 )
                 continue
 
-            rating_raw = row.get("Rating")
-            rating_level: int | None
-            if _is_missing(rating_raw):
-                rating_level = None
+            current_raw = row.get("CurrentMaturity", row.get("Rating"))
+            desired_raw = row.get("DesiredMaturity", current_raw)
+            current_maturity: int | None
+            desired_maturity: int | None
+
+            if _is_missing(current_raw):
+                current_maturity = None
             else:
                 try:
-                    rating_level = int(float(rating_raw))
+                    current_maturity = int(float(current_raw))
                 except (TypeError, ValueError):
                     validation_errors.append(
                         ValidationError(
-                            "Rating",
-                            f"Invalid rating value at row {index}",
-                            value=rating_raw,
+                            "CurrentMaturity",
+                            f"Invalid current maturity at row {index}",
+                            value=current_raw,
+                            details={"row": index},
+                        )
+                    )
+                    continue
+
+            if _is_missing(desired_raw):
+                desired_maturity = None
+            else:
+                try:
+                    desired_maturity = int(float(desired_raw))
+                except (TypeError, ValueError):
+                    validation_errors.append(
+                        ValidationError(
+                            "DesiredMaturity",
+                            f"Invalid desired maturity at row {index}",
+                            value=desired_raw,
                             details={"row": index},
                         )
                     )
@@ -669,28 +752,68 @@ def import_session_results(
                     )
                     continue
 
-            na_raw = row.get("N/A")
-            is_na = False
-            if not _is_missing(na_raw):
-                if isinstance(na_raw, str):
-                    is_na = na_raw.strip().lower() in {"1", "true", "yes", "y"}
-                else:
-                    is_na = bool(na_raw)
+            current_is_na = _coerce_bool(row.get("CurrentNA", row.get("N/A")))
+            desired_is_na = _coerce_bool(row.get("DesiredNA", row.get("N/A")))
 
             comment_raw = row.get("Comment")
             comment = None if _is_missing(comment_raw) else str(comment_raw).strip()
 
-            if not any([rating_level is not None, is_na, comment, computed_score is not None]):
+            evidence_links: list[str] | None = None
+            evidence_raw = row.get("EvidenceLinks")
+            if not _is_missing(evidence_raw):
+                if isinstance(evidence_raw, list):
+                    evidence_links = [str(item).strip() for item in evidence_raw if str(item).strip()]
+                    if not evidence_links:
+                        evidence_links = None
+                elif isinstance(evidence_raw, str):
+                    try:
+                        parsed = json.loads(evidence_raw)
+                        if isinstance(parsed, list):
+                            evidence_links = [
+                                str(item).strip() for item in parsed if str(item).strip()
+                            ] or None
+                        elif parsed is not None:
+                            evidence_links = [str(parsed).strip()]
+                    except json.JSONDecodeError:
+                        evidence_links = [
+                            part.strip()
+                            for part in re.split(r"[\n,]+", evidence_raw)
+                            if part and part.strip()
+                        ] or None
+
+            progress_state_raw = row.get("ProgressState")
+            if isinstance(progress_state_raw, str) and progress_state_raw.strip():
+                progress_state = progress_state_raw.strip().lower()
+            else:
+                progress_state = "not_started"
+            if progress_state not in {"not_started", "in_progress", "complete"}:
+                progress_state = "not_started"
+
+            if not any(
+                [
+                    current_maturity is not None,
+                    desired_maturity is not None,
+                    current_is_na,
+                    desired_is_na,
+                    comment,
+                    evidence_links,
+                    computed_score is not None,
+                ]
+            ):
                 continue
 
             try:
                 entry_repo.upsert(
                     session_id=session_id,
                     topic_id=topic_id,
-                    rating_level=rating_level,
+                    current_maturity=current_maturity,
+                    desired_maturity=desired_maturity,
                     computed_score=computed_score,
-                    is_na=is_na,
+                    current_is_na=current_is_na,
+                    desired_is_na=desired_is_na,
                     comment=comment,
+                    evidence_links=evidence_links,
+                    progress_state=progress_state,
                 )
                 processed += 1
             except ValidationError as exc:
@@ -813,12 +936,14 @@ def combine_sessions_to_master(
         for session_id in source_session_ids:
             entries = entry_repo.list_for_session(session_id)
             for entry in entries:
-                if entry.is_na:
+                if entry.current_is_na:
                     continue
 
-                # Use computed_score if available, otherwise rating_level
+                # Use computed_score if available, otherwise current maturity
                 value = (
-                    entry.computed_score if entry.computed_score is not None else entry.rating_level
+                    entry.computed_score
+                    if entry.computed_score is not None
+                    else entry.current_maturity
                 )
                 if value is not None:
                     by_topic[entry.topic_id].append(float(value))
@@ -834,16 +959,22 @@ def combine_sessions_to_master(
                 # Calculate average
                 average_score = sum(values) / len(values)
 
+                rounded = max(1, min(5, int(round(average_score))))
+
                 entry_repo.upsert(
                     session_id=master.id,
                     topic_id=topic.id,
-                    rating_level=None,
+                    current_maturity=rounded,
+                    desired_maturity=rounded,
                     computed_score=Decimal(str(round(average_score, 2))),
-                    is_na=False,
+                    current_is_na=False,
+                    desired_is_na=False,
                     comment=(
                         f"Combined from {len(values)} ratings across "
                         f"{len(source_session_ids)} sessions"
                     ),
+                    evidence_links=None,
+                    progress_state="complete",
                 )
                 entries_created += 1
             else:
@@ -851,10 +982,14 @@ def combine_sessions_to_master(
                 entry_repo.upsert(
                     session_id=master.id,
                     topic_id=topic.id,
-                    rating_level=None,
+                    current_maturity=None,
+                    desired_maturity=None,
                     computed_score=None,
-                    is_na=True,
+                    current_is_na=True,
+                    desired_is_na=True,
                     comment="No ratings available in source sessions",
+                    evidence_links=None,
+                    progress_state="not_started",
                 )
                 entries_na += 1
 
@@ -920,8 +1055,8 @@ def get_session_summary(session: Session, session_id: int) -> dict[str, Any]:
 
         # Calculate statistics
         total_entries = len(entries)
-        rated_entries = len([e for e in entries if not e.is_na and e.rating_level is not None])
-        na_entries = len([e for e in entries if e.is_na])
+        rated_entries = len([e for e in entries if not e.current_is_na and e.current_maturity is not None])
+        na_entries = len([e for e in entries if e.current_is_na])
         computed_entries = len([e for e in entries if e.computed_score is not None])
 
         completion_percent = (total_entries / total_topics * 100) if total_topics > 0 else 0
