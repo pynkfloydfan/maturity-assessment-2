@@ -103,6 +103,13 @@ class TopicRepo(GenericBaseRepository[TopicORM]):
         self,
         theme_id: int | None = None,
         name: str | None = None,
+        description: str | None = None,
+        impact: str | None = None,
+        benefits: str | None = None,
+        basic: str | None = None,
+        advanced: str | None = None,
+        evidence: str | None = None,
+        regulations: str | None = None,
         **_: Any,
     ) -> TopicORM:
         """
@@ -114,12 +121,29 @@ class TopicRepo(GenericBaseRepository[TopicORM]):
             raise ValidationError("name", "Topic name cannot be empty")
 
         # Validate input
-        validated_data = TopicInput(theme_id=theme_id, name=name)
+        validated_data = TopicInput(
+            theme_id=theme_id,
+            name=name,
+            description=description,
+            impact=impact,
+            benefits=benefits,
+            basic=basic,
+            advanced=advanced,
+            evidence=evidence,
+            regulations=regulations,
+        )
 
         try:
             topic = TopicORM(
                 theme_id=validated_data.theme_id,
                 name=validated_data.name,
+                description=validated_data.description,
+                impact=validated_data.impact,
+                benefits=validated_data.benefits,
+                basic=validated_data.basic,
+                advanced=validated_data.advanced,
+                evidence=validated_data.evidence,
+                regulations=validated_data.regulations,
             )
             self.session.add(topic)
             self.session.flush()

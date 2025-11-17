@@ -25,6 +25,13 @@ class Topic:
     theme_id: int
     name: str
     created_at: datetime
+    description: str | None = None
+    impact: str | None = None
+    benefits: str | None = None
+    basic: str | None = None
+    advanced: str | None = None
+    evidence: str | None = None
+    regulations: str | None = None
 
 
 @dataclass(slots=True)

@@ -30,7 +30,20 @@ def make_xlsx_export_bytes(topics_df: pd.DataFrame, entries_df: pd.DataFrame) ->
     """Create a single-sheet Excel export combining topic metadata and session entries."""
 
     if topics_df is None:
-        topics_df = pd.DataFrame(columns=["Dimension", "Theme", "TopicID", "Topic"])
+        topics_df = pd.DataFrame(
+            columns=[
+                "Dimension",
+                "Theme",
+                "TopicID",
+                "Topic",
+                "Impact",
+                "Benefits",
+                "Basic",
+                "Advanced",
+                "Evidence",
+                "Regulations",
+            ]
+        )
     if entries_df is None:
         entries_df = pd.DataFrame(
             columns=[
@@ -60,6 +73,12 @@ def make_xlsx_export_bytes(topics_df: pd.DataFrame, entries_df: pd.DataFrame) ->
         "Theme",
         "TopicID",
         "Topic",
+        "Impact",
+        "Benefits",
+        "Basic",
+        "Advanced",
+        "Evidence",
+        "Regulations",
         "CurrentMaturity",
         "DesiredMaturity",
         "ComputedScore",
@@ -70,11 +89,16 @@ def make_xlsx_export_bytes(topics_df: pd.DataFrame, entries_df: pd.DataFrame) ->
         "ProgressState",
         "CreatedAt",
         "UpdatedAt",
+        "Rating",
+        "N/A",
     ]
 
     for column in ordered_columns:
         if column not in combined.columns:
             combined[column] = pd.NA
+
+    combined["Rating"] = combined["CurrentMaturity"]
+    combined["N/A"] = combined["CurrentNA"]
 
     combined = combined[ordered_columns]
 

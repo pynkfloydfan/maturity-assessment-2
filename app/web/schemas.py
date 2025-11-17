@@ -30,6 +30,12 @@ class Topic(BaseModel):
     theme_id: int
     name: str
     description: Optional[str] = None
+    impact: Optional[str] = None
+    benefits: Optional[str] = None
+    basic: Optional[str] = None
+    advanced: Optional[str] = None
+    evidence: Optional[str] = None
+    regulations: Optional[str] = None
 
 
 class ThemeLevelGuidance(BaseModel):
@@ -67,6 +73,12 @@ class TopicDetail(BaseModel):
     id: int
     name: str
     description: Optional[str] = None
+    impact: Optional[str] = None
+    benefits: Optional[str] = None
+    basic: Optional[str] = None
+    advanced: Optional[str] = None
+    evidence: Optional[str] = None
+    regulations: Optional[str] = None
     current_maturity: Optional[int] = None
     current_is_na: bool = False
     desired_maturity: Optional[int] = None

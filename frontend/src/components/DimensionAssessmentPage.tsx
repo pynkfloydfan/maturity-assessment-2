@@ -631,6 +631,12 @@ export default function DimensionAssessmentPage({ enableTreatNAasZero = false }:
             </ScrollArea>
           </aside>
           <aside className="assessment-rail">
+            <div className="assessment-rail-header">
+              <div className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">Topics</div>
+              <div className="text-xs text-muted-foreground">
+                {activeThemeId ? `${filteredTopics.length} total` : "Select a theme"}
+              </div>
+            </div>
             <ScrollArea className="assessment-rail-scroll">
               <div className="flex flex-col gap-4">{renderTopicList()}</div>
             </ScrollArea>

@@ -41,6 +41,12 @@ export interface TopicDetail {
   id: number;
   name: string;
   description?: string | null;
+  impact?: string | null;
+  benefits?: string | null;
+  basic?: string | null;
+  advanced?: string | null;
+  evidence?: string | null;
+  regulations?: string | null;
   current_maturity?: number | null;
   current_is_na: boolean;
   desired_maturity?: number | null;

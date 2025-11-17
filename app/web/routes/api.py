@@ -172,7 +172,7 @@ def initialise_database_endpoint(
     config = _merge_config(request, payload)
     try:
         engine = create_database_engine(config)
-        initialise_database(engine)
+        already_exists = initialise_database(engine)
     except Exception as exc:  # pragma: no cover - FastAPI will capture details
         logger.exception("Failed to initialise database")
         return DatabaseOperationResponse(
@@ -184,7 +184,7 @@ def initialise_database_endpoint(
     _store_runtime_config(request, config, engine=engine)
     return DatabaseOperationResponse(
         status="ok",
-        message="Database tables created or already exist.",
+        message="Database tables already exist." if already_exists else "Database tables created.",
     )
 
 
@@ -554,6 +554,12 @@ def get_dimension_assessment(
                     id=topic.id,
                     name=topic.name,
                     description=topic.description,
+                    impact=topic.impact,
+                    benefits=topic.benefits,
+                    basic=topic.basic,
+                    advanced=topic.advanced,
+                    evidence=topic.evidence,
+                    regulations=topic.regulations,
                     current_maturity=(
                         entry.current_maturity if entry and not entry.current_is_na else None
                     ),
@@ -693,6 +699,12 @@ def get_theme_topics(
                 id=topic.id,
                 name=topic.name,
                 description=topic.description,
+                impact=topic.impact,
+                benefits=topic.benefits,
+                basic=topic.basic,
+                advanced=topic.advanced,
+                evidence=topic.evidence,
+                regulations=topic.regulations,
                 current_maturity=(
                     entry.current_maturity if entry and not entry.current_is_na else None
                 ),
