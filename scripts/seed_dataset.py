@@ -317,9 +317,17 @@ def sync_theme_guidance(session: Session, theme: ThemeORM, guidance_levels: dict
 
 def seed_acronyms(session: Session, table: pd.DataFrame) -> None:
     session.execute(delete(AcronymORM))
+
+    def resolve_full_term(row: pd.Series) -> str:
+        for column in ("Full term", "Full terminology", "Full Term", "Full Terminology"):
+            value = clean_text(row.get(column))
+            if value:
+                return value
+        return ""
+
     for _, row in table.iterrows():
         acronym = clean_text(row.get("Acronym"))
-        full_term = clean_text(row.get("Full term"))
+        full_term = resolve_full_term(row)
         if not acronym or not full_term:
             continue
         meaning = clean_optional(row.get("Meaning / Why it matters in this framework"))

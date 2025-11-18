@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from app.application.api import list_dimensions_with_topics
 from app.infrastructure.models import (
+    AcronymORM,
     AssessmentEntryORM,
     AssessmentSessionORM,
     Base,
@@ -185,6 +186,8 @@ def test_seed_from_excel_populates_descriptions(tmp_path):
         )
         assert topic_with_metadata is not None
         assert topic_with_metadata.regulations is not None
+        acronym_count = session.query(AcronymORM).count()
+        assert acronym_count > 0
 
     # Ensure API can still respond using seeded data
     with SessionLocal() as session:
