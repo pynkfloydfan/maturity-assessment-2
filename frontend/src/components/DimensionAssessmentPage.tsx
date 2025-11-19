@@ -14,6 +14,7 @@ import { Progress } from "./ui/progress";
 import { ScrollArea } from "./ui/scroll-area";
 import { Separator } from "./ui/separator";
 import { Textarea } from "./ui/textarea";
+import { Tabs, TabsList, TabsTrigger } from "./ui/tabs";
 import { SaveIcon } from "../icons";
 import { useNavigationBlocker } from "../hooks/useNavigationBlocker";
 import { useDimensionAssessment } from "../hooks/useDimensionAssessment";
@@ -173,6 +174,7 @@ export default function DimensionAssessmentPage({ enableTreatNAasZero = false }:
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
+  const [descriptionMode, setDescriptionMode] = useState<"basic" | "detailed">("basic");
 
   const breadcrumbItems = useMemo(() => {
     if (!data?.dimension) return [{ label: "Dimensions", path: "/" }];
@@ -279,6 +281,22 @@ export default function DimensionAssessmentPage({ enableTreatNAasZero = false }:
     () => ratingScale.map((item) => item.level).sort((a, b) => a - b),
     [ratingScale],
   );
+  const detailedSections = useMemo(
+    () =>
+      selectedTopic
+        ? [
+            { key: "description", label: "Description", value: selectedTopic.description },
+            { key: "impact", label: "Impact (when weak)", value: selectedTopic.impact },
+            { key: "benefits", label: "Benefits (when strong)", value: selectedTopic.benefits },
+            { key: "basic", label: "Basic implementation", value: selectedTopic.basic },
+            { key: "advanced", label: "Advanced implementation", value: selectedTopic.advanced },
+            { key: "evidence", label: "Evidence of effectiveness", value: selectedTopic.evidence },
+            { key: "regulations", label: "Regulatory pointers", value: selectedTopic.regulations },
+          ]
+        : [],
+    [selectedTopic],
+  );
+
   const desiredAllowedLevels = useMemo(
     () => allowedDesiredLevels(selectedSnapshot, ratingLevels, enableTreatNAasZero),
     [selectedSnapshot, ratingLevels, enableTreatNAasZero],
@@ -677,7 +695,19 @@ export default function DimensionAssessmentPage({ enableTreatNAasZero = false }:
 
                 {selectedTopic && (
                   <Fragment>
-                    <div>
+                    <div className="space-y-3">
+                      <Tabs
+                        value={descriptionMode}
+                        onValueChange={(value) =>
+                          setDescriptionMode(value === "detailed" ? "detailed" : "basic")
+                        }
+                        className="dashboard-tabs description-tabs"
+                      >
+                        <TabsList className="dashboard-tabs__list">
+                          <TabsTrigger value="basic">Basic description</TabsTrigger>
+                          <TabsTrigger value="detailed">Detailed description</TabsTrigger>
+                        </TabsList>
+                      </Tabs>
                       <details className="group rounded-lg border border-border bg-muted/30 px-4 py-3">
                         <summary className="flex cursor-pointer items-center justify-between text-sm text-muted-foreground">
                           <span>What it is</span>
@@ -686,12 +716,33 @@ export default function DimensionAssessmentPage({ enableTreatNAasZero = false }:
                             <span className="transition-transform group-open:rotate-90">›</span>
                           </span>
                         </summary>
-                        {selectedTopic.description ? (
-                          <div className="mt-3 text-sm leading-relaxed text-muted-foreground">
-                            {renderDescriptionWithBreaks(selectedTopic.description)}
-                          </div>
+                        {descriptionMode === "basic" ? (
+                          selectedTopic.description ? (
+                            <div className="mt-3 text-sm leading-relaxed text-muted-foreground">
+                              {renderDescriptionWithBreaks(selectedTopic.description)}
+                            </div>
+                          ) : (
+                            <div className="mt-3 text-sm text-muted-foreground/80">
+                              No description provided.
+                            </div>
+                          )
                         ) : (
-                          <div className="mt-3 text-sm text-muted-foreground/80">No description provided.</div>
+                          <div className="mt-3 space-y-4 text-sm leading-relaxed text-muted-foreground">
+                            {detailedSections.map((section) => (
+                              <div key={section.key}>
+                                <div className="font-semibold text-foreground">{section.label}</div>
+                                <div className="mt-1 text-muted-foreground">
+                                  {section.value ? (
+                                    renderDescriptionWithBreaks(section.value)
+                                  ) : (
+                                    <span className="text-muted-foreground/70">
+                                      No information provided.
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
                         )}
                       </details>
                     </div>
