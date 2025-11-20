@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from app.application.api import list_dimensions_with_topics
 from app.infrastructure.models import (
+    AcronymORM,
     AssessmentEntryORM,
     AssessmentSessionORM,
     Base,
@@ -177,6 +178,16 @@ def test_seed_from_excel_populates_descriptions(tmp_path):
 
         topics_df = list_dimensions_with_topics(session)
         assert not topics_df.empty
+        topic_with_metadata = (
+            session.query(TopicORM)
+            .filter(TopicORM.impact.isnot(None))
+            .filter(TopicORM.benefits.isnot(None))
+            .first()
+        )
+        assert topic_with_metadata is not None
+        assert topic_with_metadata.regulations is not None
+        acronym_count = session.query(AcronymORM).count()
+        assert acronym_count > 0
 
     # Ensure API can still respond using seeded data
     with SessionLocal() as session:
@@ -203,7 +214,21 @@ def test_export_session_xlsx_single_sheet(tmp_path):
     assert xls.sheet_names == ["Assessment"]
 
     df = xls.parse("Assessment")
-    for column in ["Dimension", "Theme", "TopicID", "Topic", "Rating", "N/A", "Comment"]:
+    for column in [
+        "Dimension",
+        "Theme",
+        "TopicID",
+        "Topic",
+        "Impact",
+        "Benefits",
+        "Basic",
+        "Advanced",
+        "Evidence",
+        "Regulations",
+        "Rating",
+        "N/A",
+        "Comment",
+    ]:
         assert column in df.columns
 
     # Ensure topics are present and aligned with entries

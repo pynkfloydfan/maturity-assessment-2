@@ -227,6 +227,13 @@ class TopicInput(BaseValidationSchema):
 
     theme_id: int = Field(..., gt=0)
     name: str = Field(..., min_length=1, max_length=500)
+    description: str | None = Field(default=None)
+    impact: str | None = Field(default=None)
+    benefits: str | None = Field(default=None)
+    basic: str | None = Field(default=None)
+    advanced: str | None = Field(default=None)
+    evidence: str | None = Field(default=None)
+    regulations: str | None = Field(default=None)
 
     @field_validator("name")
     def validate_topic_name(cls, v):

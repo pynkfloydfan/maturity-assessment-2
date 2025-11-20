@@ -406,6 +406,13 @@ class BackupService:
                     "id": topic.id,
                     "theme_id": topic.theme_id,
                     "name": topic.name,
+                    "description": topic.description,
+                    "impact": topic.impact,
+                    "benefits": topic.benefits,
+                    "basic": topic.basic,
+                    "advanced": topic.advanced,
+                    "evidence": topic.evidence,
+                    "regulations": topic.regulations,
                     "created_at": topic.created_at.isoformat(),
                 }
                 for topic in all_topics
@@ -614,7 +621,17 @@ class BackupService:
             # Restore topics
             topic_repo = TopicRepo(self.session)
             for topic_data in backup_data.get("topics", []):
-                topic_repo.create(topic_data["theme_id"], topic_data["name"])
+                topic_repo.create(
+                    topic_data["theme_id"],
+                    topic_data["name"],
+                    description=topic_data.get("description"),
+                    impact=topic_data.get("impact"),
+                    benefits=topic_data.get("benefits"),
+                    basic=topic_data.get("basic"),
+                    advanced=topic_data.get("advanced"),
+                    evidence=topic_data.get("evidence"),
+                    regulations=topic_data.get("regulations"),
+                )
                 stats["topics_restored"] += 1
 
             # Restore explanations

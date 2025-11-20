@@ -222,15 +222,35 @@ def extract_theme_descriptions(table: pd.DataFrame) -> dict[str, str | None]:
     return mapping
 
 
-def extract_topic_descriptions(table: pd.DataFrame) -> dict[str, str | None]:
-    mapping: dict[str, str | None] = {}
+def extract_topic_details(table: pd.DataFrame) -> dict[str, dict[str, str | None]]:
+    """
+    Extract per-topic metadata (description, impact, etc.) from the topic_desc table.
+    """
+
+    column_map = {
+        "description": "Topic_Description",
+        "impact": "Impact (when weak)",
+        "benefits": "Benefits (when strong)",
+        "basic": "Basic implementation",
+        "advanced": "Advanced implementation",
+        "evidence": "Evidence of effectiveness",
+        "regulations": "Regulatory pointers",
+    }
+
+    def update_field(store: dict[str, str | None], key: str, value: str | None) -> None:
+        if value:
+            store[key] = value
+        elif key not in store:
+            store[key] = None
+
+    mapping: dict[str, dict[str, str | None]] = {}
     for _, row in table.iterrows():
         topic = clean_text(row.get("Topic"))
         if not topic:
             continue
-        description = clean_optional(row.get("Topic_Description"))
-        if topic not in mapping or mapping[topic] is None:
-            mapping[topic] = description
+        entry = mapping.setdefault(topic, {})
+        for field, column in column_map.items():
+            update_field(entry, field, clean_optional(row.get(column)))
     return mapping
 
 
@@ -297,9 +317,17 @@ def sync_theme_guidance(session: Session, theme: ThemeORM, guidance_levels: dict
 
 def seed_acronyms(session: Session, table: pd.DataFrame) -> None:
     session.execute(delete(AcronymORM))
+
+    def resolve_full_term(row: pd.Series) -> str:
+        for column in ("Full term", "Full terminology", "Full Term", "Full Terminology"):
+            value = clean_text(row.get(column))
+            if value:
+                return value
+        return ""
+
     for _, row in table.iterrows():
         acronym = clean_text(row.get("Acronym"))
-        full_term = clean_text(row.get("Full term"))
+        full_term = resolve_full_term(row)
         if not acronym or not full_term:
             continue
         meaning = clean_optional(row.get("Meaning / Why it matters in this framework"))
@@ -333,7 +361,7 @@ def seed_from_excel(session: Session, excel_path: Path) -> ExcelSeedSource:
     cmmi_definitions = extract_cmmi_definitions(cmmi_table)
     dimension_descriptions = extract_dimension_descriptions(dimension_desc_table)
     theme_descriptions = extract_theme_descriptions(theme_desc_table)
-    topic_descriptions = extract_topic_descriptions(topic_desc_table)
+    topic_details = extract_topic_details(topic_desc_table)
     theme_categories, theme_generic_levels = extract_theme_generics(theme_generic_table)
 
     rating_columns = detect_rating_columns(framework_df.columns)
@@ -350,7 +378,6 @@ def seed_from_excel(session: Session, excel_path: Path) -> ExcelSeedSource:
         dimension_name = clean_text(row.get("Dimension"))
         theme_name = clean_text(row.get("Theme"))
         topic_name = clean_text(row.get("Topic"))
-
         if not (dimension_name and theme_name and topic_name):
             continue
 
@@ -419,7 +446,14 @@ def seed_from_excel(session: Session, excel_path: Path) -> ExcelSeedSource:
             topic = TopicORM(theme_id=theme_id, name=topic_name)
             session.add(topic)
             session.flush()
-        topic.description = topic_descriptions.get(topic_name)
+        details = topic_details.get(topic_name, {})
+        topic.description = details.get("description")
+        topic.impact = details.get("impact")
+        topic.benefits = details.get("benefits")
+        topic.basic = details.get("basic")
+        topic.advanced = details.get("advanced")
+        topic.evidence = details.get("evidence")
+        topic.regulations = details.get("regulations")
 
         if topic.id not in processed_topics:
             session.execute(delete(ExplanationORM).where(ExplanationORM.topic_id == topic.id))

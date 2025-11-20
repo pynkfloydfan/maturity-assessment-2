@@ -62,7 +62,8 @@ def list_dimensions_with_topics(session: Session) -> pd.DataFrame:
         session: Database session
 
     Returns:
-        DataFrame with columns: Dimension, Theme, TopicID, Topic
+        DataFrame with columns: Dimension, Theme, TopicID, Topic, Impact, Benefits, Basic,
+        Advanced, Evidence, Regulations
 
     Raises:
         DatabaseError: If database operation fails
@@ -79,6 +80,12 @@ def list_dimensions_with_topics(session: Session) -> pd.DataFrame:
                 ThemeORM.name.label("Theme"),
                 TopicORM.id.label("TopicID"),
                 TopicORM.name.label("Topic"),
+                TopicORM.impact.label("Impact"),
+                TopicORM.benefits.label("Benefits"),
+                TopicORM.basic.label("Basic"),
+                TopicORM.advanced.label("Advanced"),
+                TopicORM.evidence.label("Evidence"),
+                TopicORM.regulations.label("Regulations"),
             )
             .join(ThemeORM, ThemeORM.dimension_id == DimensionORM.id)
             .join(TopicORM, TopicORM.theme_id == ThemeORM.id)
@@ -86,7 +93,21 @@ def list_dimensions_with_topics(session: Session) -> pd.DataFrame:
             .all()
         )
 
-        df = pd.DataFrame(rows, columns=["Dimension", "Theme", "TopicID", "Topic"])
+        df = pd.DataFrame(
+            rows,
+            columns=[
+                "Dimension",
+                "Theme",
+                "TopicID",
+                "Topic",
+                "Impact",
+                "Benefits",
+                "Basic",
+                "Advanced",
+                "Evidence",
+                "Regulations",
+            ],
+        )
         logger.info(f"Retrieved {len(df)} topics across all dimensions")
         return df
 

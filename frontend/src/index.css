@@ -524,6 +524,13 @@ body {
   justify-content: space-between;
 }
 
+.assessment-rail-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
 .theme-rail-scroll {
   flex: 1 1 auto;
   overflow-y: auto;
