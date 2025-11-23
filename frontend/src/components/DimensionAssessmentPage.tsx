@@ -34,7 +34,7 @@ import {
   isSnapshotComplete,
   mapShortcut,
 } from "../utils/assessmentRules";
-import { getGradientStyle, getRatingChipStyle } from "../utils/ratingColors";
+import { getRatingChipStyle } from "../utils/ratingColors";
 
 type SnapshotMapState = SnapshotMap;
 
@@ -59,14 +59,6 @@ function extractSnapshotLevels(snapshot?: TopicSnapshot) {
       ? snapshot.desiredMaturity
       : null;
   return { current, desired };
-}
-
-function gradientForSnapshot(snapshot?: TopicSnapshot) {
-  const { current, desired } = extractSnapshotLevels(snapshot);
-  if (current == null || desired == null) {
-    return undefined;
-  }
-  return getGradientStyle(current, desired);
 }
 
 interface RatingControlProps {
@@ -500,6 +492,57 @@ export default function DimensionAssessmentPage({ enableTreatNAasZero = false }:
     return () => window.removeEventListener("keydown", handler);
   }, [handleCurrentChange, handleDesiredChange, isReadOnly, selectedTopic]);
 
+  const renderRatingChip = (value: number | null | undefined, isNa: boolean, label: string) => {
+    if (isNa) {
+      return (
+        <span className="rating-chip rating-chip--na" aria-label={`${label} rating not applicable`}>
+          N/A
+        </span>
+      );
+    }
+    if (value == null) {
+      return (
+        <span className="rating-chip rating-chip--muted" aria-label={`${label} rating not provided`}>
+          –
+        </span>
+      );
+    }
+    return (
+      <span className="rating-chip" style={getRatingChipStyle(value)} aria-label={`${label} rating ${value}`}>
+        {value}
+      </span>
+    );
+  };
+
+  const renderSnapshotComparison = (snapshot?: TopicSnapshot) => {
+    if (!snapshot || !isSnapshotComplete(snapshot)) {
+      return <span className="rating-chip rating-chip--muted">Unrated</span>;
+    }
+    return (
+      <div className="rating-combo" aria-label="Current and desired rating overview">
+        {renderRatingChip(snapshot.currentMaturity ?? null, snapshot.currentIsNa, "Current")}
+        <span className="rating-arrow" aria-hidden="true">
+          <svg
+            viewBox="0 0 24 12"
+            role="presentation"
+            focusable="false"
+            aria-hidden="true"
+          >
+            <path
+              d="M1 6h20M15 1l5 5-5 5"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              fill="none"
+            />
+          </svg>
+        </span>
+        {renderRatingChip(snapshot.desiredMaturity ?? null, snapshot.desiredIsNa, "Desired")}
+      </div>
+    );
+  };
+
   const renderTopicList = () => {
     if (!activeThemeId) {
       return <div className="text-sm text-muted-foreground">Select a theme to view its topics.</div>;
@@ -514,10 +557,6 @@ export default function DimensionAssessmentPage({ enableTreatNAasZero = false }:
 
     return filteredTopics.map((topic) => {
       const snapshot = snapshots[topic.id];
-      const gradientStyle = gradientForSnapshot(snapshot);
-      const badgeLabel = isSnapshotComplete(snapshot) ? `${snapshot.currentIsNa ? "N/A" : snapshot.currentMaturity ?? "–"}→${
-        snapshot.desiredIsNa ? "N/A" : snapshot.desiredMaturity ?? "–"
-      }` : "Unrated";
       return (
         <button
           key={topic.id}
@@ -531,12 +570,7 @@ export default function DimensionAssessmentPage({ enableTreatNAasZero = false }:
         >
           <div className="flex items-start justify-between gap-3">
             <div className="text-sm font-medium leading-snug text-foreground">{highlight(topic.name)}</div>
-            <Badge
-              variant={isSnapshotComplete(snapshot) ? "default" : "secondary"}
-              style={gradientStyle}
-            >
-              {badgeLabel}
-            </Badge>
+            <div>{renderSnapshotComparison(snapshot)}</div>
           </div>
           {topic.description && (
             <p className="mt-2 text-xs text-muted-foreground line-clamp-2">{highlight(topic.description)}</p>
@@ -584,7 +618,7 @@ export default function DimensionAssessmentPage({ enableTreatNAasZero = false }:
     <div className="flex h-full flex-col gap-4">
       <header className="border-b border-border bg-background px-6 py-4 shadow-sm">
         <div className="flex w-full flex-wrap items-stretch gap-4">
-          <div className="flex min-w-[260px] flex-1 flex-col gap-2">
+          <div className="flex min-w-[320px] flex-[2] flex-col gap-2">
             <div className="text-3xl font-semibold text-foreground">
               {data?.dimension ? highlight(data.dimension.name) : "Dimension assessment"}
             </div>
@@ -598,12 +632,16 @@ export default function DimensionAssessmentPage({ enableTreatNAasZero = false }:
               <span>{topicProgress.percent}%</span>
             </div>
           </div>
-          {data?.dimension?.description && (
-            <div className="flex-1 min-w-[260px] rounded-xl border border-border bg-muted/40 p-4 text-sm leading-relaxed text-muted-foreground">
-              {highlight(data.dimension.description)}
+          <div className="flex flex-[2.5] min-w-[360px] flex-col">
+            <div className="rounded-xl border border-border bg-muted/40 p-4 text-sm leading-relaxed text-muted-foreground">
+              {data?.dimension?.description ? (
+                highlight(data.dimension.description)
+              ) : (
+                <span className="text-muted-foreground/70">No dimension description provided.</span>
+              )}
             </div>
-          )}
-          <div className="flex items-center gap-2">
+          </div>
+          <div className="flex min-w-[260px] flex-1 items-center justify-end gap-2">
             <Button
               variant="secondary"
               onClick={handleSave}
@@ -672,18 +710,7 @@ export default function DimensionAssessmentPage({ enableTreatNAasZero = false }:
                       {selectedTopic ? highlight(selectedTopic.name) : "Select a topic"}
                     </div>
                   </div>
-                  <Badge
-                    variant={isSnapshotComplete(selectedSnapshot) ? "default" : "secondary"}
-                    style={gradientForSnapshot(selectedSnapshot)}
-                  >
-                    {selectedSnapshot
-                      ? selectedSnapshot.currentIsNa
-                        ? "N/A"
-                        : `${selectedSnapshot.currentMaturity ?? "–"}→${
-                            selectedSnapshot.desiredIsNa ? "N/A" : selectedSnapshot.desiredMaturity ?? "–"
-                          }`
-                      : "Unrated"}
-                  </Badge>
+                  <div>{renderSnapshotComparison(selectedSnapshot)}</div>
                 </CardTitle>
               </CardHeader>
               <CardContent className="flex flex-col gap-8">

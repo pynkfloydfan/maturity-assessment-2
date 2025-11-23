@@ -28,6 +28,10 @@ jinja2 = "^3.1.6"
 python-multipart = "^0.0.20"
 httpx = {version = "^0.27.2", extras = ["http2"]}
 pillow = "^11.0.0"
+click = "^8.3.0"
+h11 = "^0.16.0"
+pydantic-core = "^2.41.1"
+anyio = "^4.11.0"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.3.2"
@@ -48,7 +52,7 @@ profile = "black"
 [tool.ruff]
 line-length = 100
 src = ["app", "scripts", "tests"]
-target-version = "py313"
+target-version = ["py310","py311","py312","py313"]
 fix = true
 unsafe-fixes = true
 

@@ -1,9 +1,10 @@
-import { ChangeEvent, useMemo } from "react";
+import { ChangeEvent, FocusEvent, useMemo, useState } from "react";
 import { Link, NavLink } from "react-router-dom";
 import avatarImage from "../../assets/user-avatar.png";
 import Breadcrumb from "./Breadcrumb";
 import { useSessionContext } from "../../context/SessionContext";
 import { useBreadcrumbContext } from "../../context/BreadcrumbContext";
+import { useDimensions } from "../../hooks/useDimensions";
 
 function HeaderIcon() {
   return (
@@ -16,12 +17,13 @@ function HeaderIcon() {
 export default function Header() {
   const { sessions, activeSessionId, selectSession, loading, error } = useSessionContext();
   const { items: breadcrumbItems } = useBreadcrumbContext();
+  const { dimensions, loading: dimensionsLoading } = useDimensions();
+  const [dimensionMenuOpen, setDimensionMenuOpen] = useState(false);
   const statusText = error ? "Needs attention" : loading ? "Loading…" : "Ready";
   const statusState = error ? "status-chip--error" : loading ? "status-chip--loading" : "status-chip--ready";
 
   const navLinks = useMemo(
     () => [
-      { label: "Dimensions", to: "/" },
       { label: "Dashboard", to: "/dashboard" },
       { label: "Settings", to: "/settings" },
       { label: "Help", to: "/help" },
@@ -53,6 +55,47 @@ export default function Header() {
 
         <div className="header-nav-stack">
           <nav className="nav-links">
+            <div
+              className={`nav-dropdown-wrapper${dimensionMenuOpen ? " nav-dropdown-wrapper--open" : ""}`}
+              onMouseEnter={() => setDimensionMenuOpen(true)}
+              onMouseLeave={() => setDimensionMenuOpen(false)}
+              onFocus={() => setDimensionMenuOpen(true)}
+              onBlur={(event: FocusEvent<HTMLDivElement>) => {
+                if (!event.currentTarget.contains(event.relatedTarget)) {
+                  setDimensionMenuOpen(false);
+                }
+              }}
+            >
+              <NavLink
+                to="/"
+                className={({ isActive }) =>
+                  `nav-link nav-link--dropdown${isActive ? " active" : ""}`
+                }
+                aria-haspopup="true"
+                aria-expanded={dimensionMenuOpen}
+                title="Hover to jump to a dimension"
+              >
+                Dimensions
+                <span className="nav-link__caret" aria-hidden="true">▾</span>
+              </NavLink>
+              <div className="nav-dropdown" role="menu" aria-label="All dimensions">
+                {dimensionsLoading && <div className="nav-dropdown__item muted">Loading dimensions…</div>}
+                {!dimensionsLoading && dimensions.length === 0 && (
+                  <div className="nav-dropdown__item muted">No dimensions available</div>
+                )}
+                {dimensions.map((dimension) => (
+                  <Link
+                    key={dimension.id}
+                    to={`/dimensions/${dimension.id}/assessment`}
+                    className="nav-dropdown__item"
+                    role="menuitem"
+                    onClick={() => setDimensionMenuOpen(false)}
+                  >
+                    {dimension.name}
+                  </Link>
+                ))}
+              </div>
+            </div>
             {navLinks.map((link) => (
               <NavLink key={link.to} to={link.to} className={({ isActive }) => `nav-link${isActive ? " active" : ""}`}>
                 {link.label}

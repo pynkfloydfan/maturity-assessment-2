@@ -10,7 +10,7 @@ from __future__ import annotations
 import re
 from datetime import datetime
 from decimal import Decimal
-from html import escape
+from html import unescape
 from typing import Any, Literal
 
 from pydantic import BaseModel, Field, field_validator, model_validator
@@ -28,10 +28,20 @@ class BaseValidationSchema(BaseModel):
     def sanitize_strings(cls, v):
         """Sanitize string inputs to prevent XSS and injection attacks."""
         if isinstance(v, str):
-            # Remove potentially dangerous characters and HTML
-            v = escape(v.strip())
+            # Normalize whitespace and decode any HTML entities to preserve user intent
+            cleaned = unescape(v.strip())
+            # Strip script tags entirely
+            cleaned = re.sub(
+                r"<\s*script[^>]*>.*?<\s*/\s*script\s*>",
+                "",
+                cleaned,
+                flags=re.IGNORECASE | re.DOTALL,
+            )
+            # Remove any remaining inline HTML tags
+            cleaned = re.sub(r"<[^>]+>", "", cleaned)
             # Remove null bytes and control characters
-            v = re.sub(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f-\x9f]", "", v)
+            cleaned = re.sub(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f-\x9f]", "", cleaned)
+            return cleaned
         return v
 
 
