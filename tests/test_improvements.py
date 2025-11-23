@@ -121,7 +121,7 @@ class TestPydanticValidation:
         assert result.data is not None
         data = result.data
         assert data["name"] == "Test Session"
-        assert "&lt;script&gt;" in data["assessor"]  # HTML escaped
+        assert data["assessor"] == "John"  # Script tag removed
         assert "\x00" not in data["notes"]  # Control char removed
         assert data["created_at"].date() == datetime(2024, 3, 5).date()
 

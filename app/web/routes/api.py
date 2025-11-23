@@ -4,6 +4,7 @@ import io
 import json
 import logging
 import math
+from html import unescape
 from pathlib import Path
 
 import pandas as pd
@@ -73,6 +74,12 @@ logger = logging.getLogger(__name__)
 APP_DIR = Path(__file__).resolve().parents[2]
 PROJECT_ROOT = APP_DIR.parent
 DEFAULT_EXCEL_PATH = (APP_DIR / "source_data" / "Maturity_Assessment_Data.xlsx").resolve()
+
+
+def _decode_text(value: str | None) -> str | None:
+    if value is None:
+        return None
+    return unescape(value)
 
 
 def _config_to_dict(config: DatabaseConfig) -> dict[str, object]:
@@ -568,7 +575,7 @@ def get_dimension_assessment(
                         entry.desired_maturity if entry and not entry.desired_is_na else None
                     ),
                     desired_is_na=bool(entry.desired_is_na) if entry else False,
-                    comment=entry.comment if entry else None,
+                    comment=_decode_text(entry.comment) if entry else None,
                     evidence_links=evidence,
                     progress_state=state,
                     guidance=guidance_map.get(topic.id, {}),
@@ -713,7 +720,7 @@ def get_theme_topics(
                     entry.desired_maturity if entry and not entry.desired_is_na else None
                 ),
                 desired_is_na=bool(entry.desired_is_na) if entry else False,
-                comment=entry.comment if entry else None,
+                comment=_decode_text(entry.comment) if entry else None,
                 evidence_links=evidence_links,
                 progress_state=entry.progress_state if entry else "not_started",
                 guidance=guidance_map.get(topic.id, {}),

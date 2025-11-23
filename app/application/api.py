@@ -12,6 +12,7 @@ import math
 import re
 from decimal import Decimal
 from datetime import date, datetime
+from html import unescape
 from typing import Any
 
 import pandas as pd
@@ -614,7 +615,7 @@ def export_session_results(session: Session, session_id: int) -> tuple[pd.DataFr
                     "ComputedScore": float(entry.computed_score) if entry.computed_score else None,
                     "CurrentNA": entry.current_is_na,
                     "DesiredNA": entry.desired_is_na,
-                    "Comment": entry.comment,
+                    "Comment": unescape(entry.comment) if entry.comment else None,
                     "EvidenceLinks": evidence,
                     "ProgressState": entry.progress_state,
                     "CreatedAt": entry.created_at,
