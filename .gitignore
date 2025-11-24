@@ -226,5 +226,5 @@ app/web/static/frontend/
 node_modules/
 frontend/node_modules/
 
-# Temporary files created by text editors or IDEs
-*~
+# Temporary files in source_data
+source_data/~*
