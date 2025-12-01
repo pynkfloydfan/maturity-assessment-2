@@ -888,9 +888,6 @@ export default function DimensionAssessmentPage({ enableTreatNAasZero = false }:
                         {highlight(`Level ${item.level} — ${item.label}`)}
                       </span>
                     </div>
-                    {item.description && (
-                      <p className="text-xs text-muted-foreground">{highlight(item.description)}</p>
-                    )}
                     <div className="mt-2 space-y-2 text-sm text-muted-foreground">
                       {guidance.length > 0 ? (
                         guidance.map((text, index) => (

@@ -87,6 +87,7 @@ def _add_theme_bar(fig, *, theta_left, theta_right, r0, r1, color, theme_name, t
 
 def make_resilience_radar_with_theme_bars(
     scores: pd.DataFrame,
+    target_scores: pd.DataFrame | None = None,
     dimension_order: list[str] | None = None,
     title: str | None = None,
     max_score: float = 5.0,
@@ -113,12 +114,24 @@ def make_resilience_radar_with_theme_bars(
     # Clamp scores to [0, max_score] defensively (does not change typical inputs)
     scores = scores.copy()
     scores["Score"] = scores["Score"].astype(float).clip(lower=0.0, upper=float(max_score))
+    target_df = None
+    if target_scores is not None and not target_scores.empty:
+        missing_target = required_cols - set(target_scores.columns)
+        if missing_target:
+            raise ValueError(f"Target scores missing required columns: {sorted(missing_target)}")
+        if not np.issubdtype(target_scores["Score"].dtype, np.number):
+            raise TypeError("Column 'Score' in target_scores must be numeric.")
+        target_df = target_scores.copy()
+        target_df["Score"] = target_df["Score"].astype(float).clip(lower=0.0, upper=float(max_score))
 
     # -------- summaries --------
     dim_summary = scores.groupby("Dimension", as_index=False).agg(mean_score=("Score", "mean"))
     theme_summary = scores.groupby(["Dimension", "Theme"], as_index=False).agg(
         theme_mean=("Score", "mean")
     )
+    target_summary = None
+    if target_df is not None:
+        target_summary = target_df.groupby("Dimension", as_index=False).agg(target_mean=("Score", "mean"))
 
     # -------- dimension order & angles --------
     if dimension_order is None:
@@ -137,6 +150,9 @@ def make_resilience_radar_with_theme_bars(
 
     dim_summary = dim_summary.merge(angle_map, on="Dimension", how="right")
     theme_summary = theme_summary.merge(angle_map, on="Dimension", how="left")
+    if target_summary is not None:
+        target_summary = angle_map.merge(target_summary, on="Dimension", how="left")
+        target_summary = target_summary.dropna(subset=["target_mean"])
 
     # -------- colours (unchanged behaviour) --------
     dim_summary["mean_color"] = dim_summary["mean_score"].apply(gradient_color)
@@ -159,10 +175,28 @@ def make_resilience_radar_with_theme_bars(
                 line=dict(color="#666666", width=1.5),
                 fill="toself",
                 fillcolor="rgba(0,0,0,0.08)",
-                name="Mean Score (0–5)",
+                name="Current maturity",
                 hoverinfo="skip",
             )
         )
+    if target_summary is not None and not target_summary.empty:
+        t_vals = target_summary["target_mean"].tolist()
+        t_theta = target_summary["theta"].tolist()
+        if len(t_vals) >= 1:
+            t_loop = t_vals + [t_vals[0]]
+            t_theta_loop = t_theta + [t_theta[0]]
+            fig.add_trace(
+                go.Scatterpolar(
+                    r=t_loop,
+                    theta=t_theta_loop,
+                    mode="lines",
+                    line=dict(color="#1d4ed8", width=2, dash="dash"),
+                    fill=None,
+                    name="Target maturity",
+                    hovertemplate="<b>%{customdata[0]}</b><br>Target: %{customdata[1]:.2f}<extra></extra>",
+                    customdata=np.stack([target_summary["Dimension"], target_summary["target_mean"]], axis=1),
+                )
+            )
 
     # Mean markers per dimension (colour by gradient)
     fig.add_trace(

@@ -519,32 +519,51 @@ def build_dashboard_figures(session: Session, session_id: int) -> dict[str, Any]
         )
 
         ratings_map: dict[int, float] = {}
+        target_map: dict[int, float] = {}
         for entry in entries:
-            if entry.current_is_na:
-                continue
-            if entry.computed_score is not None:
-                ratings_map[entry.topic_id] = float(entry.computed_score)
-            elif entry.current_maturity is not None:
-                ratings_map[entry.topic_id] = float(entry.current_maturity)
+            if not entry.current_is_na:
+                if entry.computed_score is not None:
+                    ratings_map[entry.topic_id] = float(entry.computed_score)
+                elif entry.current_maturity is not None:
+                    ratings_map[entry.topic_id] = float(entry.current_maturity)
+            if not entry.desired_is_na and entry.desired_maturity is not None:
+                target_map[entry.topic_id] = float(entry.desired_maturity)
 
         score_rows: list[dict[str, Any]] = []
+        target_rows: list[dict[str, Any]] = []
         for _, row in topics_df.iterrows():
             topic_id = int(row["TopicID"])
             score = ratings_map.get(topic_id)
             if score is None:
-                continue
-            score_rows.append(
-                {
-                    "Dimension": row["Dimension"],
-                    "Theme": row["Theme"],
-                    "Question": row["Topic"],
-                    "Score": score,
-                }
-            )
+                pass
+            else:
+                score_rows.append(
+                    {
+                        "Dimension": row["Dimension"],
+                        "Theme": row["Theme"],
+                        "Question": row["Topic"],
+                        "Score": score,
+                    }
+                )
+            target = target_map.get(topic_id)
+            if target is not None:
+                target_rows.append(
+                    {
+                        "Dimension": row["Dimension"],
+                        "Theme": row["Theme"],
+                        "Question": row["Topic"],
+                        "Score": target,
+                    }
+                )
 
         if score_rows:
             scores_df = pd.DataFrame(score_rows, columns=["Dimension", "Theme", "Question", "Score"])
-            figure = make_resilience_radar_with_theme_bars(scores_df)
+            target_df = (
+                pd.DataFrame(target_rows, columns=["Dimension", "Theme", "Question", "Score"])
+                if target_rows
+                else None
+            )
+            figure = make_resilience_radar_with_theme_bars(scores_df, target_scores=target_df)
             radar_json = json.loads(figure.to_json())
 
         return {"tiles": tiles, "radar": radar_json}

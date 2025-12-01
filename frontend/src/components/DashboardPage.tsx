@@ -24,6 +24,8 @@ function Tile({ tile }: { tile: DashboardTile }) {
   const average = typeof tile.average === "number" ? tile.average.toFixed(2) : "—";
   const coverage = typeof tile.coverage === "number" ? Math.round(tile.coverage * 100) : null;
   const background = tile.color ?? "#f3f5f9";
+  const progressPercent =
+    typeof tile.average === "number" ? Math.min(Math.max((tile.average / 5) * 100, 0), 100) : 0;
 
   return (
     <div
@@ -38,7 +40,7 @@ function Tile({ tile }: { tile: DashboardTile }) {
       <div className="h-2 w-full overflow-hidden rounded-full bg-[#eef2f9]">
         <div
           className="h-full"
-          style={{ width: `${Math.min(Math.max(coverage ?? 0, 0), 100)}%`, background }}
+          style={{ width: `${progressPercent}%`, background }}
         />
       </div>
     </div>
